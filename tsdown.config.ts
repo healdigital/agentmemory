@@ -33,7 +33,6 @@ export default defineConfig([
     clean: false,
     sourcemap: false,
     target: "node18",
-    banner: { js: "#!/usr/bin/env node" },
   },
   {
     entry: hookEntries,

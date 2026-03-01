@@ -22,6 +22,7 @@ async function main() {
 		await fetch(`${REST_URL}/agentmemory/claude-bridge/sync`, {
 			method: "POST",
 			headers: authHeaders(),
+			body: JSON.stringify({}),
 			signal: AbortSignal.timeout(5e3)
 		});
 	} catch {}

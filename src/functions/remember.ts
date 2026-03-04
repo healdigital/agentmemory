@@ -3,21 +3,9 @@ import { getContext } from "iii-sdk";
 import type { Memory } from "../types.js";
 import { KV, generateId, jaccardSimilarity } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
-
-function createMutex() {
-  let chain = Promise.resolve();
-  return function withLock<T>(fn: () => Promise<T>): Promise<T> {
-    const next = chain.then(fn, fn);
-    chain = next.then(
-      () => {},
-      () => {},
-    );
-    return next;
-  };
-}
+import { withKeyedLock } from "../state/keyed-mutex.js";
 
 export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
-  const withLock = createMutex();
   sdk.registerFunction(
     { id: "mem::remember" },
     async (data: {
@@ -54,7 +42,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
 
       const now = new Date().toISOString();
 
-      return withLock(async () => {
+      return withKeyedLock("mem:remember", async () => {
         const existingMemories = await kv.list<Memory>(KV.memories);
         let supersededId: string | undefined;
         let supersededVersion = 1;

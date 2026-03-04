@@ -17,15 +17,24 @@ export class CircuitBreaker {
   private readonly recoveryTimeoutMs: number;
 
   constructor(opts?: CircuitBreakerOptions) {
-    this.failureThreshold = opts?.failureThreshold ?? 3;
-    this.failureWindowMs = opts?.failureWindowMs ?? 60_000;
-    this.recoveryTimeoutMs = opts?.recoveryTimeoutMs ?? 30_000;
+    const ft = opts?.failureThreshold;
+    this.failureThreshold =
+      Number.isFinite(ft) && ft! > 0 ? Math.max(1, Math.floor(ft!)) : 3;
+
+    const fw = opts?.failureWindowMs;
+    this.failureWindowMs = Number.isFinite(fw) && fw! > 0 ? fw! : 60_000;
+
+    const rt = opts?.recoveryTimeoutMs;
+    this.recoveryTimeoutMs = Number.isFinite(rt) && rt! > 0 ? rt! : 30_000;
   }
 
   get isAllowed(): boolean {
     if (this.state === "closed") return true;
     if (this.state === "open") {
-      if (this.openedAt && Date.now() - this.openedAt >= this.recoveryTimeoutMs) {
+      if (
+        this.openedAt &&
+        Date.now() - this.openedAt >= this.recoveryTimeoutMs
+      ) {
         this.state = "half-open";
         return true;
       }

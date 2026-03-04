@@ -31,11 +31,7 @@ export function registerTeamFunction(
         return { success: false, error: `Invalid itemType: ${data.itemType}` };
       }
 
-      let content: unknown = null;
-      if (data.itemType === "memory" || data.itemType === "pattern") {
-        content = await kv.get<Memory>(KV.memories, data.itemId);
-      }
-
+      const content = await kv.get<Memory>(KV.memories, data.itemId);
       if (!content) {
         return { success: false, error: "Item not found" };
       }

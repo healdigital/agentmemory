@@ -3,18 +3,7 @@ import { getContext } from "iii-sdk";
 import type { Memory, MemoryRelation } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
-
-function createMutex() {
-  let chain = Promise.resolve();
-  return function withLock<T>(fn: () => Promise<T>): Promise<T> {
-    const next = chain.then(fn, fn);
-    chain = next.then(
-      () => {},
-      () => {},
-    );
-    return next;
-  };
-}
+import { withKeyedLock } from "../state/keyed-mutex.js";
 
 function computeConfidence(
   source: Memory,
@@ -46,8 +35,6 @@ function computeConfidence(
 }
 
 export function registerRelationsFunction(sdk: ISdk, kv: StateKV): void {
-  const withLock = createMutex();
-
   sdk.registerFunction(
     {
       id: "mem::relate",
@@ -60,8 +47,9 @@ export function registerRelationsFunction(sdk: ISdk, kv: StateKV): void {
       confidence?: number;
     }) => {
       const ctx = getContext();
+      const lockKey = [data.sourceId, data.targetId].sort().join(":");
 
-      return withLock(async () => {
+      return withKeyedLock(lockKey, async () => {
         const source = await kv.get<Memory>(KV.memories, data.sourceId);
         const target = await kv.get<Memory>(KV.memories, data.targetId);
         if (!source || !target) {

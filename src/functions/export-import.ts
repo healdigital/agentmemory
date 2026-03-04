@@ -59,7 +59,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         .catch(() => []);
 
       const exportData: ExportData = {
-        version: VERSION as ExportData["version"],
+        version: VERSION,
         exportedAt: new Date().toISOString(),
         sessions,
         observations,

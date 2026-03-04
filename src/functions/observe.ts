@@ -5,6 +5,7 @@ import { KV, STREAM, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { stripPrivateData } from "./privacy.js";
 import { DedupMap } from "./dedup.js";
+import { withKeyedLock } from "../state/keyed-mutex.js";
 
 export function registerObserveFunction(
   sdk: ISdk,
@@ -54,16 +55,6 @@ export function registerObserveFunction(
         dedupMap.record(hash);
       }
 
-      if (maxObservationsPerSession && maxObservationsPerSession > 0) {
-        const existing = await kv.list(KV.observations(payload.sessionId));
-        if (existing.length >= maxObservationsPerSession) {
-          return {
-            success: false,
-            error: `Session observation limit reached (${maxObservationsPerSession})`,
-          };
-        }
-      }
-
       let sanitizedRaw: unknown = payload.data;
       try {
         const jsonStr = JSON.stringify(payload.data);
@@ -96,35 +87,47 @@ export function registerObserveFunction(
         }
       }
 
-      await kv.set(KV.observations(payload.sessionId), obsId, raw);
+      return withKeyedLock(`obs:${payload.sessionId}`, async () => {
+        if (maxObservationsPerSession && maxObservationsPerSession > 0) {
+          const existing = await kv.list(KV.observations(payload.sessionId));
+          if (existing.length >= maxObservationsPerSession) {
+            return {
+              success: false,
+              error: `Session observation limit reached (${maxObservationsPerSession})`,
+            };
+          }
+        }
 
-      await sdk.trigger("stream::set", {
-        stream_name: STREAM.name,
-        group_id: STREAM.group(payload.sessionId),
-        item_id: obsId,
-        data: { type: "raw", observation: raw },
-      });
+        await kv.set(KV.observations(payload.sessionId), obsId, raw);
 
-      const session = await kv.get<Session>(KV.sessions, payload.sessionId);
-      if (session) {
-        await kv.set(KV.sessions, payload.sessionId, {
-          ...session,
-          observationCount: (session.observationCount || 0) + 1,
+        await sdk.trigger("stream::set", {
+          stream_name: STREAM.name,
+          group_id: STREAM.group(payload.sessionId),
+          item_id: obsId,
+          data: { type: "raw", observation: raw },
         });
-      }
 
-      sdk.triggerVoid("mem::compress", {
-        observationId: obsId,
-        sessionId: payload.sessionId,
-        raw,
-      });
+        const session = await kv.get<Session>(KV.sessions, payload.sessionId);
+        if (session) {
+          await kv.set(KV.sessions, payload.sessionId, {
+            ...session,
+            observationCount: (session.observationCount || 0) + 1,
+          });
+        }
 
-      ctx.logger.info("Observation captured", {
-        obsId,
-        sessionId: payload.sessionId,
-        hook: payload.hookType,
+        sdk.triggerVoid("mem::compress", {
+          observationId: obsId,
+          sessionId: payload.sessionId,
+          raw,
+        });
+
+        ctx.logger.info("Observation captured", {
+          obsId,
+          sessionId: payload.sessionId,
+          hook: payload.hookType,
+        });
+        return { observationId: obsId };
       });
-      return { observationId: obsId };
     },
   );
 }

@@ -51,6 +51,7 @@ import { registerSnapshotFunction } from "./functions/snapshot.js";
 import { registerApiTriggers } from "./triggers/api.js";
 import { registerEventTriggers } from "./triggers/events.js";
 import { registerMcpEndpoints } from "./mcp/server.js";
+import { startViewerServer } from "./viewer/server.js";
 import { MetricsStore } from "./eval/metrics-store.js";
 import { DedupMap } from "./functions/dedup.js";
 import { registerHealthMonitor } from "./health/monitor.js";
@@ -221,7 +222,17 @@ async function main() {
     `[agentmemory] Ready. ${embeddingProvider ? "Hybrid" : "BM25"} search active.`,
   );
   console.log(
-    `[agentmemory] Endpoints: 43 REST + 18 MCP tools + 6 MCP resources + 3 MCP prompts + 33 functions`,
+    `[agentmemory] Endpoints: 49 REST + 18 MCP tools + 6 MCP resources + 3 MCP prompts + 33 functions`,
+  );
+
+  const viewerPort = config.restPort + 2;
+  const viewerServer = startViewerServer(
+    viewerPort,
+    kv,
+    sdk,
+    secret,
+    metricsStore,
+    provider,
   );
 
   const shutdown = async () => {
@@ -229,6 +240,7 @@ async function main() {
     healthMonitor.stop();
     dedupMap.stop();
     indexPersistence.stop();
+    await new Promise<void>((resolve) => viewerServer.close(() => resolve()));
     await indexPersistence.save().catch((err) => {
       console.warn(`[agentmemory] Failed to save index on shutdown:`, err);
     });

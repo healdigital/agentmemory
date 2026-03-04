@@ -1,8 +1,10 @@
 import type { CircuitBreakerState } from "../types.js";
 
-const FAILURE_THRESHOLD = 3;
-const FAILURE_WINDOW_MS = 60_000;
-const RECOVERY_TIMEOUT_MS = 30_000;
+interface CircuitBreakerOptions {
+  failureThreshold?: number;
+  failureWindowMs?: number;
+  recoveryTimeoutMs?: number;
+}
 
 export class CircuitBreaker {
   private state: "closed" | "open" | "half-open" = "closed";
@@ -10,10 +12,20 @@ export class CircuitBreaker {
   private lastFailureAt: number | null = null;
   private openedAt: number | null = null;
 
+  private readonly failureThreshold: number;
+  private readonly failureWindowMs: number;
+  private readonly recoveryTimeoutMs: number;
+
+  constructor(opts?: CircuitBreakerOptions) {
+    this.failureThreshold = opts?.failureThreshold ?? 3;
+    this.failureWindowMs = opts?.failureWindowMs ?? 60_000;
+    this.recoveryTimeoutMs = opts?.recoveryTimeoutMs ?? 30_000;
+  }
+
   get isAllowed(): boolean {
     if (this.state === "closed") return true;
     if (this.state === "open") {
-      if (this.openedAt && Date.now() - this.openedAt >= RECOVERY_TIMEOUT_MS) {
+      if (this.openedAt && Date.now() - this.openedAt >= this.recoveryTimeoutMs) {
         this.state = "half-open";
         return true;
       }
@@ -38,12 +50,12 @@ export class CircuitBreaker {
       this.openedAt = now;
       return;
     }
-    if (this.lastFailureAt && now - this.lastFailureAt > FAILURE_WINDOW_MS) {
+    if (this.lastFailureAt && now - this.lastFailureAt > this.failureWindowMs) {
       this.failures = 0;
     }
     this.failures += 1;
     this.lastFailureAt = now;
-    if (this.failures >= FAILURE_THRESHOLD) {
+    if (this.failures >= this.failureThreshold) {
       this.state = "open";
       this.openedAt = now;
     }

@@ -14,6 +14,7 @@ import type {
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { VERSION } from "../version.js";
 
 export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction(
@@ -58,7 +59,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         .catch(() => []);
 
       const exportData: ExportData = {
-        version: "0.4.0",
+        version: VERSION as ExportData["version"],
         exportedAt: new Date().toISOString(),
         sessions,
         observations,

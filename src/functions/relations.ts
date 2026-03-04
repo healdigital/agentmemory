@@ -4,6 +4,18 @@ import type { Memory, MemoryRelation } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 
+function createMutex() {
+  let chain = Promise.resolve();
+  return function withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const next = chain.then(fn, fn);
+    chain = next.then(
+      () => {},
+      () => {},
+    );
+    return next;
+  };
+}
+
 function computeConfidence(
   source: Memory,
   target: Memory,
@@ -34,6 +46,8 @@ function computeConfidence(
 }
 
 export function registerRelationsFunction(sdk: ISdk, kv: StateKV): void {
+  const withLock = createMutex();
+
   sdk.registerFunction(
     {
       id: "mem::relate",
@@ -47,47 +61,49 @@ export function registerRelationsFunction(sdk: ISdk, kv: StateKV): void {
     }) => {
       const ctx = getContext();
 
-      const source = await kv.get<Memory>(KV.memories, data.sourceId);
-      const target = await kv.get<Memory>(KV.memories, data.targetId);
-      if (!source || !target) {
-        return { success: false, error: "source or target memory not found" };
-      }
+      return withLock(async () => {
+        const source = await kv.get<Memory>(KV.memories, data.sourceId);
+        const target = await kv.get<Memory>(KV.memories, data.targetId);
+        if (!source || !target) {
+          return { success: false, error: "source or target memory not found" };
+        }
 
-      const confidence =
-        data.confidence !== undefined
-          ? Math.max(0, Math.min(1, data.confidence))
-          : computeConfidence(source, target, data.type);
+        const confidence =
+          data.confidence !== undefined
+            ? Math.max(0, Math.min(1, data.confidence))
+            : computeConfidence(source, target, data.type);
 
-      const relation: MemoryRelation = {
-        type: data.type,
-        sourceId: data.sourceId,
-        targetId: data.targetId,
-        createdAt: new Date().toISOString(),
-        confidence,
-      };
+        const relation: MemoryRelation = {
+          type: data.type,
+          sourceId: data.sourceId,
+          targetId: data.targetId,
+          createdAt: new Date().toISOString(),
+          confidence,
+        };
 
-      const relationId = generateId("rel");
-      await kv.set(KV.relations, relationId, relation);
+        const relationId = generateId("rel");
+        await kv.set(KV.relations, relationId, relation);
 
-      if (!source.relatedIds) source.relatedIds = [];
-      if (!source.relatedIds.includes(data.targetId)) {
-        source.relatedIds.push(data.targetId);
-        await kv.set(KV.memories, data.sourceId, source);
-      }
+        if (!source.relatedIds) source.relatedIds = [];
+        if (!source.relatedIds.includes(data.targetId)) {
+          source.relatedIds.push(data.targetId);
+          await kv.set(KV.memories, data.sourceId, source);
+        }
 
-      if (!target.relatedIds) target.relatedIds = [];
-      if (!target.relatedIds.includes(data.sourceId)) {
-        target.relatedIds.push(data.sourceId);
-        await kv.set(KV.memories, data.targetId, target);
-      }
+        if (!target.relatedIds) target.relatedIds = [];
+        if (!target.relatedIds.includes(data.sourceId)) {
+          target.relatedIds.push(data.sourceId);
+          await kv.set(KV.memories, data.targetId, target);
+        }
 
-      ctx.logger.info("Memory relation created", {
-        relationId,
-        type: data.type,
-        source: data.sourceId,
-        target: data.targetId,
+        ctx.logger.info("Memory relation created", {
+          relationId,
+          type: data.type,
+          source: data.sourceId,
+          target: data.targetId,
+        });
+        return { success: true, relationId, relation };
       });
-      return { success: true, relationId, relation };
     },
   );
 

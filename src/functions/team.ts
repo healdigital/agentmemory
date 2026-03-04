@@ -23,8 +23,12 @@ export function registerTeamFunction(
       project?: string;
     }) => {
       const ctx = getContext();
+      const VALID_ITEM_TYPES = new Set(["memory", "pattern"]);
       if (!data.itemId || !data.itemType) {
         return { success: false, error: "itemId and itemType are required" };
+      }
+      if (!VALID_ITEM_TYPES.has(data.itemType)) {
+        return { success: false, error: `Invalid itemType: ${data.itemType}` };
       }
 
       let content: unknown = null;

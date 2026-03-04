@@ -10,6 +10,7 @@ export function registerObserveFunction(
   sdk: ISdk,
   kv: StateKV,
   dedupMap?: DedupMap,
+  maxObservationsPerSession?: number,
 ): void {
   sdk.registerFunction(
     {
@@ -51,6 +52,16 @@ export function registerObserveFunction(
           return { deduplicated: true, sessionId: payload.sessionId };
         }
         dedupMap.record(hash);
+      }
+
+      if (maxObservationsPerSession && maxObservationsPerSession > 0) {
+        const existing = await kv.list(KV.observations(payload.sessionId));
+        if (existing.length >= maxObservationsPerSession) {
+          return {
+            success: false,
+            error: `Session observation limit reached (${maxObservationsPerSession})`,
+          };
+        }
       }
 
       let sanitizedRaw: unknown = payload.data;

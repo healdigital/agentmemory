@@ -237,7 +237,7 @@ export interface ProjectProfile {
 }
 
 export interface ExportData {
-  version: "0.3.0" | "0.4.0";
+  version: "0.3.0" | "0.4.0" | "0.5.0";
   exportedAt: string;
   sessions: Session[];
   observations: Record<string, CompressedObservation[]>;
@@ -248,6 +248,15 @@ export interface ExportData {
   graphEdges?: GraphEdge[];
   semanticMemories?: SemanticMemory[];
   proceduralMemories?: ProceduralMemory[];
+  actions?: Action[];
+  actionEdges?: ActionEdge[];
+  routines?: Routine[];
+  signals?: Signal[];
+  checkpoints?: Checkpoint[];
+  sentinels?: Sentinel[];
+  sketches?: Sketch[];
+  crystals?: Crystal[];
+  facets?: Facet[];
 }
 
 export interface EmbeddingConfig {
@@ -383,7 +392,24 @@ export interface AuditEntry {
     | "share"
     | "delete"
     | "import"
-    | "export";
+    | "export"
+    | "action_create"
+    | "action_update"
+    | "lease_acquire"
+    | "lease_release"
+    | "routine_run"
+    | "signal_send"
+    | "checkpoint_resolve"
+    | "mesh_sync"
+    | "sentinel_create"
+    | "sentinel_trigger"
+    | "sketch_create"
+    | "sketch_promote"
+    | "sketch_discard"
+    | "crystallize"
+    | "diagnose"
+    | "heal"
+    | "facet_tag";
   userId?: string;
   functionId: string;
   targetIds: string[];
@@ -417,4 +443,175 @@ export interface SnapshotDiff {
   toCommit: string;
   added: { memories: number; observations: number; graphNodes: number };
   removed: { memories: number; observations: number; graphNodes: number };
+}
+
+export interface Action {
+  id: string;
+  title: string;
+  description: string;
+  status: "pending" | "active" | "done" | "blocked" | "cancelled";
+  priority: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  assignedTo?: string;
+  project?: string;
+  tags: string[];
+  sourceObservationIds: string[];
+  sourceMemoryIds: string[];
+  result?: string;
+  parentId?: string;
+  metadata?: Record<string, unknown>;
+  sketchId?: string;
+  crystallizedInto?: string;
+}
+
+export type ActionEdgeType =
+  | "requires"
+  | "unlocks"
+  | "spawned_by"
+  | "gated_by"
+  | "conflicts_with";
+
+export interface ActionEdge {
+  id: string;
+  type: ActionEdgeType;
+  sourceActionId: string;
+  targetActionId: string;
+  createdAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface Lease {
+  id: string;
+  actionId: string;
+  agentId: string;
+  acquiredAt: string;
+  expiresAt: string;
+  renewedAt?: string;
+  status: "active" | "expired" | "released";
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  description: string;
+  steps: RoutineStep[];
+  createdAt: string;
+  updatedAt: string;
+  frozen: boolean;
+  tags: string[];
+  sourceProceduralIds: string[];
+}
+
+export interface RoutineStep {
+  order: number;
+  title: string;
+  description: string;
+  actionTemplate: Partial<Action>;
+  dependsOn: number[];
+}
+
+export interface RoutineRun {
+  id: string;
+  routineId: string;
+  status: "running" | "completed" | "failed" | "paused";
+  startedAt: string;
+  completedAt?: string;
+  actionIds: string[];
+  stepStatus: Record<number, "pending" | "active" | "done" | "failed">;
+  initiatedBy: string;
+}
+
+export interface Signal {
+  id: string;
+  from: string;
+  to?: string;
+  threadId?: string;
+  replyTo?: string;
+  type: "info" | "request" | "response" | "alert" | "handoff";
+  content: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+  readAt?: string;
+  expiresAt?: string;
+}
+
+export interface Checkpoint {
+  id: string;
+  name: string;
+  description: string;
+  status: "pending" | "passed" | "failed" | "expired";
+  type: "ci" | "approval" | "deploy" | "external" | "timer";
+  createdAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+  result?: unknown;
+  expiresAt?: string;
+  linkedActionIds: string[];
+}
+
+export interface Sketch {
+  id: string;
+  title: string;
+  description: string;
+  status: "active" | "promoted" | "discarded";
+  actionIds: string[];
+  project?: string;
+  createdAt: string;
+  expiresAt: string;
+  promotedAt?: string;
+  discardedAt?: string;
+}
+
+export interface Facet {
+  id: string;
+  targetId: string;
+  targetType: "action" | "memory" | "observation";
+  dimension: string;
+  value: string;
+  createdAt: string;
+}
+
+export interface Sentinel {
+  id: string;
+  name: string;
+  type: "webhook" | "timer" | "threshold" | "pattern" | "approval" | "custom";
+  status: "watching" | "triggered" | "cancelled" | "expired";
+  config: Record<string, unknown>;
+  result?: unknown;
+  createdAt: string;
+  triggeredAt?: string;
+  expiresAt?: string;
+  linkedActionIds: string[];
+  escalatedAt?: string;
+}
+
+export interface Crystal {
+  id: string;
+  narrative: string;
+  keyOutcomes: string[];
+  filesAffected: string[];
+  lessons: string[];
+  sourceActionIds: string[];
+  sessionId?: string;
+  project?: string;
+  createdAt: string;
+}
+
+export interface DiagnosticCheck {
+  name: string;
+  category: string;
+  status: "pass" | "warn" | "fail";
+  message: string;
+  fixable: boolean;
+}
+
+export interface MeshPeer {
+  id: string;
+  url: string;
+  name: string;
+  lastSyncAt?: string;
+  status: "connected" | "disconnected" | "syncing" | "error";
+  sharedScopes: string[];
 }

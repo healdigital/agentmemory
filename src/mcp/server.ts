@@ -94,14 +94,14 @@ export function registerMcpEndpoints(
               };
             }
             const type = (args.type as string) || "fact";
-            const concepts = args.concepts
-              ? (args.concepts as string)
-                  .split(",")
-                  .map((c: string) => c.trim())
-              : [];
-            const files = args.files
-              ? (args.files as string).split(",").map((f: string) => f.trim())
-              : [];
+            const concepts =
+              typeof args.concepts === "string"
+                ? args.concepts.split(",").map((c: string) => c.trim()).filter(Boolean)
+                : [];
+            const files =
+              typeof args.files === "string"
+                ? args.files.split(",").map((f: string) => f.trim()).filter(Boolean)
+                : [];
 
             const result = await sdk.trigger("mem::remember", {
               content: args.content,
@@ -179,12 +179,10 @@ export function registerMcpEndpoints(
                 body: { error: "query is required for memory_smart_search" },
               };
             }
-            const expandIds = args.expandIds
-              ? (args.expandIds as string)
-                  .split(",")
-                  .map((id: string) => id.trim())
-                  .slice(0, 20)
-              : [];
+            const expandIds =
+              typeof args.expandIds === "string"
+                ? args.expandIds.split(",").map((id: string) => id.trim()).slice(0, 20)
+                : [];
             const result = await sdk.trigger("mem::smart-search", {
               query: args.query,
               expandIds,
@@ -524,6 +522,397 @@ export function registerMcpEndpoints(
                 },
               };
             }
+          }
+
+          case "memory_action_create": {
+            if (typeof args.title !== "string" || !args.title.trim()) {
+              return {
+                status_code: 400,
+                body: { error: "title is required" },
+              };
+            }
+            const edges: Array<{ type: string; targetActionId: string }> = [];
+            if (typeof args.requires === "string" && args.requires.trim()) {
+              for (const id of args.requires.split(",").map((s: string) => s.trim()).filter(Boolean)) {
+                edges.push({ type: "requires", targetActionId: id });
+              }
+            }
+            const tags = typeof args.tags === "string" && args.tags.trim()
+              ? args.tags.split(",").map((t: string) => t.trim()).filter(Boolean)
+              : [];
+            const actionResult = await sdk.trigger("mem::action-create", {
+              title: args.title,
+              description: args.description,
+              priority: args.priority,
+              project: args.project,
+              tags,
+              parentId: args.parentId,
+              edges: edges.length > 0 ? edges : undefined,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(actionResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_action_update": {
+            if (typeof args.actionId !== "string" || !args.actionId.trim()) {
+              return {
+                status_code: 400,
+                body: { error: "actionId is required" },
+              };
+            }
+            const updateResult = await sdk.trigger("mem::action-update", {
+              actionId: args.actionId,
+              status: args.status,
+              result: args.result,
+              priority: args.priority,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(updateResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_frontier": {
+            const frontierResult = await sdk.trigger("mem::frontier", {
+              project: args.project,
+              agentId: args.agentId,
+              limit: args.limit,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(frontierResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_next": {
+            const nextResult = await sdk.trigger("mem::next", {
+              project: args.project,
+              agentId: args.agentId,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(nextResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_lease": {
+            if (
+              typeof args.actionId !== "string" ||
+              typeof args.agentId !== "string" ||
+              typeof args.operation !== "string"
+            ) {
+              return {
+                status_code: 400,
+                body: { error: "actionId, agentId, and operation are required" },
+              };
+            }
+            const op = args.operation as string;
+            let leaseResult;
+            if (op === "acquire") {
+              leaseResult = await sdk.trigger("mem::lease-acquire", {
+                actionId: args.actionId,
+                agentId: args.agentId,
+                ttlMs: args.ttlMs,
+              });
+            } else if (op === "release") {
+              leaseResult = await sdk.trigger("mem::lease-release", {
+                actionId: args.actionId,
+                agentId: args.agentId,
+                result: args.result,
+              });
+            } else if (op === "renew") {
+              leaseResult = await sdk.trigger("mem::lease-renew", {
+                actionId: args.actionId,
+                agentId: args.agentId,
+                ttlMs: args.ttlMs,
+              });
+            } else {
+              return {
+                status_code: 400,
+                body: { error: "operation must be acquire, release, or renew" },
+              };
+            }
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(leaseResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_routine_run": {
+            if (typeof args.routineId !== "string") {
+              return {
+                status_code: 400,
+                body: { error: "routineId is required" },
+              };
+            }
+            const runResult = await sdk.trigger("mem::routine-run", {
+              routineId: args.routineId,
+              project: args.project,
+              initiatedBy: args.initiatedBy,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(runResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_signal_send": {
+            if (
+              typeof args.from !== "string" ||
+              typeof args.content !== "string"
+            ) {
+              return {
+                status_code: 400,
+                body: { error: "from and content are required" },
+              };
+            }
+            const sigResult = await sdk.trigger("mem::signal-send", {
+              from: args.from,
+              to: args.to,
+              content: args.content,
+              type: args.type,
+              replyTo: args.replyTo,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(sigResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_signal_read": {
+            if (typeof args.agentId !== "string") {
+              return {
+                status_code: 400,
+                body: { error: "agentId is required" },
+              };
+            }
+            const readResult = await sdk.trigger("mem::signal-read", {
+              agentId: args.agentId,
+              unreadOnly: args.unreadOnly === true || args.unreadOnly === "true",
+              threadId: args.threadId,
+              limit: args.limit,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(readResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_checkpoint": {
+            const cpOp = args.operation as string;
+            if (!cpOp) {
+              return {
+                status_code: 400,
+                body: { error: "operation is required" },
+              };
+            }
+            let cpResult;
+            if (cpOp === "create") {
+              const linkedIds = typeof args.linkedActionIds === "string" && args.linkedActionIds.trim()
+                ? args.linkedActionIds.split(",").map((s: string) => s.trim())
+                : [];
+              cpResult = await sdk.trigger("mem::checkpoint-create", {
+                name: args.name,
+                description: args.description,
+                type: args.type,
+                linkedActionIds: linkedIds,
+              });
+            } else if (cpOp === "resolve") {
+              if (typeof args.checkpointId !== "string" || !args.checkpointId.trim()) {
+                return {
+                  status_code: 400,
+                  body: { error: "checkpointId is required for resolve operation" },
+                };
+              }
+              cpResult = await sdk.trigger("mem::checkpoint-resolve", {
+                checkpointId: args.checkpointId,
+                status: args.status,
+              });
+            } else if (cpOp === "list") {
+              cpResult = await sdk.trigger("mem::checkpoint-list", {
+                status: args.status,
+                type: args.type,
+              });
+            } else {
+              return {
+                status_code: 400,
+                body: { error: "operation must be create, resolve, or list" },
+              };
+            }
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(cpResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_mesh_sync": {
+            const meshResult = await sdk.trigger("mem::mesh-sync", {
+              peerId: args.peerId,
+              direction: args.direction,
+            });
+            return {
+              status_code: 200,
+              body: {
+                content: [
+                  { type: "text", text: JSON.stringify(meshResult, null, 2) },
+                ],
+              },
+            };
+          }
+
+          case "memory_sentinel_create": {
+            let snlConfig: Record<string, unknown> = {};
+            if (typeof args.config === "object" && args.config !== null) {
+              snlConfig = args.config as Record<string, unknown>;
+            } else if (typeof args.config === "string" && args.config.trim()) {
+              try { snlConfig = JSON.parse(args.config); } catch { return { status_code: 400, body: { error: "invalid config JSON" } }; }
+            }
+            const snlLinked = typeof args.linkedActionIds === "string" && args.linkedActionIds.trim()
+              ? args.linkedActionIds.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : undefined;
+            const snlResult = await sdk.trigger("mem::sentinel-create", {
+              name: args.name,
+              type: args.type,
+              config: snlConfig,
+              linkedActionIds: snlLinked,
+              expiresInMs: args.expiresInMs,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(snlResult, null, 2) }] } };
+          }
+
+          case "memory_sentinel_trigger": {
+            let snlTrigPayload: unknown;
+            if (args.result !== undefined && args.result !== null) {
+              if (typeof args.result === "string") {
+                try { snlTrigPayload = JSON.parse(args.result); } catch { return { status_code: 400, body: { error: "invalid result JSON" } }; }
+              } else {
+                snlTrigPayload = args.result;
+              }
+            }
+            const snlTrigResult = await sdk.trigger("mem::sentinel-trigger", {
+              sentinelId: args.sentinelId,
+              result: snlTrigPayload,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(snlTrigResult, null, 2) }] } };
+          }
+
+          case "memory_sketch_create": {
+            const skResult = await sdk.trigger("mem::sketch-create", {
+              title: args.title,
+              description: args.description,
+              expiresInMs: args.expiresInMs,
+              project: args.project,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(skResult, null, 2) }] } };
+          }
+
+          case "memory_sketch_promote": {
+            const skpResult = await sdk.trigger("mem::sketch-promote", {
+              sketchId: args.sketchId,
+              project: args.project,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(skpResult, null, 2) }] } };
+          }
+
+          case "memory_crystallize": {
+            if (typeof args.actionIds !== "string" || !args.actionIds.trim()) {
+              return { status_code: 400, body: { error: "actionIds is required" } };
+            }
+            const crysIds = args.actionIds.split(",").map((s: string) => s.trim()).filter(Boolean);
+            const crysResult = await sdk.trigger("mem::crystallize", {
+              actionIds: crysIds,
+              project: args.project,
+              sessionId: args.sessionId,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(crysResult, null, 2) }] } };
+          }
+
+          case "memory_diagnose": {
+            const diagCats = typeof args.categories === "string" && args.categories.trim()
+              ? args.categories.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : undefined;
+            const diagResult = await sdk.trigger("mem::diagnose", { categories: diagCats });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(diagResult, null, 2) }] } };
+          }
+
+          case "memory_heal": {
+            const healCats = typeof args.categories === "string" && args.categories.trim()
+              ? args.categories.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : undefined;
+            const healResult = await sdk.trigger("mem::heal", {
+              categories: healCats,
+              dryRun: args.dryRun === true || args.dryRun === "true",
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(healResult, null, 2) }] } };
+          }
+
+          case "memory_facet_tag": {
+            const fctResult = await sdk.trigger("mem::facet-tag", {
+              targetId: args.targetId,
+              targetType: args.targetType,
+              dimension: args.dimension,
+              value: args.value,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(fctResult, null, 2) }] } };
+          }
+
+          case "memory_facet_query": {
+            if (args.matchAll !== undefined && typeof args.matchAll !== "string") {
+              return { status_code: 400, body: { error: "matchAll must be a string" } };
+            }
+            if (args.matchAny !== undefined && typeof args.matchAny !== "string") {
+              return { status_code: 400, body: { error: "matchAny must be a string" } };
+            }
+            const fqAll = typeof args.matchAll === "string" && args.matchAll.trim()
+              ? args.matchAll.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : undefined;
+            const fqAny = typeof args.matchAny === "string" && args.matchAny.trim()
+              ? args.matchAny.split(",").map((s: string) => s.trim()).filter(Boolean)
+              : undefined;
+            const fqResult = await sdk.trigger("mem::facet-query", {
+              matchAll: fqAll,
+              matchAny: fqAny,
+              targetType: args.targetType,
+            });
+            return { status_code: 200, body: { content: [{ type: "text", text: JSON.stringify(fqResult, null, 2) }] } };
           }
 
           default:

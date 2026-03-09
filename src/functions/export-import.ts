@@ -11,6 +11,15 @@ import type {
   GraphEdge,
   SemanticMemory,
   ProceduralMemory,
+  Action,
+  ActionEdge,
+  Routine,
+  Signal,
+  Checkpoint,
+  Sentinel,
+  Sketch,
+  Crystal,
+  Facet,
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
@@ -58,6 +67,16 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         .list<ProceduralMemory>(KV.procedural)
         .catch(() => []);
 
+      const actions = await kv.list<Action>(KV.actions).catch(() => []);
+      const actionEdges = await kv.list<ActionEdge>(KV.actionEdges).catch(() => []);
+      const sentinels = await kv.list<Sentinel>(KV.sentinels).catch(() => []);
+      const sketches = await kv.list<Sketch>(KV.sketches).catch(() => []);
+      const crystals = await kv.list<Crystal>(KV.crystals).catch(() => []);
+      const facets = await kv.list<Facet>(KV.facets).catch(() => []);
+      const routines = await kv.list<Routine>(KV.routines).catch(() => []);
+      const signals = await kv.list<Signal>(KV.signals).catch(() => []);
+      const checkpoints = await kv.list<Checkpoint>(KV.checkpoints).catch(() => []);
+
       const exportData: ExportData = {
         version: VERSION,
         exportedAt: new Date().toISOString(),
@@ -72,6 +91,15 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
           semanticMemories.length > 0 ? semanticMemories : undefined,
         proceduralMemories:
           proceduralMemories.length > 0 ? proceduralMemories : undefined,
+        actions: actions.length > 0 ? actions : undefined,
+        actionEdges: actionEdges.length > 0 ? actionEdges : undefined,
+        sentinels: sentinels.length > 0 ? sentinels : undefined,
+        sketches: sketches.length > 0 ? sketches : undefined,
+        crystals: crystals.length > 0 ? crystals : undefined,
+        facets: facets.length > 0 ? facets : undefined,
+        routines: routines.length > 0 ? routines : undefined,
+        signals: signals.length > 0 ? signals : undefined,
+        checkpoints: checkpoints.length > 0 ? checkpoints : undefined,
       };
 
       const totalObs = Object.values(observations).reduce(
@@ -102,7 +130,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
       const strategy = data.strategy || "merge";
       const importData = data.exportData;
 
-      const supportedVersions = new Set(["0.3.0", "0.4.0"]);
+      const supportedVersions = new Set(["0.3.0", "0.4.0", "0.5.0"]);
       if (!supportedVersions.has(importData.version)) {
         return {
           success: false,
@@ -207,6 +235,33 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         for (const s of existingSummaries) {
           await kv.delete(KV.summaries, s.sessionId);
         }
+        for (const a of await kv.list<Action>(KV.actions).catch(() => [])) {
+          await kv.delete(KV.actions, a.id);
+        }
+        for (const e of await kv.list<ActionEdge>(KV.actionEdges).catch(() => [])) {
+          await kv.delete(KV.actionEdges, e.id);
+        }
+        for (const r of await kv.list<Routine>(KV.routines).catch(() => [])) {
+          await kv.delete(KV.routines, r.id);
+        }
+        for (const s of await kv.list<Signal>(KV.signals).catch(() => [])) {
+          await kv.delete(KV.signals, s.id);
+        }
+        for (const c of await kv.list<Checkpoint>(KV.checkpoints).catch(() => [])) {
+          await kv.delete(KV.checkpoints, c.id);
+        }
+        for (const s of await kv.list<Sentinel>(KV.sentinels).catch(() => [])) {
+          await kv.delete(KV.sentinels, s.id);
+        }
+        for (const s of await kv.list<Sketch>(KV.sketches).catch(() => [])) {
+          await kv.delete(KV.sketches, s.id);
+        }
+        for (const c of await kv.list<Crystal>(KV.crystals).catch(() => [])) {
+          await kv.delete(KV.crystals, c.id);
+        }
+        for (const f of await kv.list<Facet>(KV.facets).catch(() => [])) {
+          await kv.delete(KV.facets, f.id);
+        }
       }
 
       for (const session of importData.sessions) {
@@ -269,22 +324,120 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
 
       if (importData.graphNodes) {
         for (const node of importData.graphNodes) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.graphNodes, node.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
           await kv.set(KV.graphNodes, node.id, node);
         }
       }
       if (importData.graphEdges) {
         for (const edge of importData.graphEdges) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.graphEdges, edge.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
           await kv.set(KV.graphEdges, edge.id, edge);
         }
       }
       if (importData.semanticMemories) {
         for (const sem of importData.semanticMemories) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.semantic, sem.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
           await kv.set(KV.semantic, sem.id, sem);
         }
       }
       if (importData.proceduralMemories) {
         for (const proc of importData.proceduralMemories) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.procedural, proc.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
           await kv.set(KV.procedural, proc.id, proc);
+        }
+      }
+
+      if (importData.actions) {
+        for (const action of importData.actions) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.actions, action.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.actions, action.id, action);
+        }
+      }
+      if (importData.actionEdges) {
+        for (const edge of importData.actionEdges) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.actionEdges, edge.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.actionEdges, edge.id, edge);
+        }
+      }
+      if (importData.routines) {
+        for (const routine of importData.routines) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.routines, routine.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.routines, routine.id, routine);
+        }
+      }
+      if (importData.signals) {
+        for (const signal of importData.signals) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.signals, signal.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.signals, signal.id, signal);
+        }
+      }
+      if (importData.checkpoints) {
+        for (const checkpoint of importData.checkpoints) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.checkpoints, checkpoint.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.checkpoints, checkpoint.id, checkpoint);
+        }
+      }
+      if (importData.sentinels) {
+        for (const sentinel of importData.sentinels) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.sentinels, sentinel.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.sentinels, sentinel.id, sentinel);
+        }
+      }
+      if (importData.sketches) {
+        for (const sketch of importData.sketches) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.sketches, sketch.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.sketches, sketch.id, sketch);
+        }
+      }
+      if (importData.crystals) {
+        for (const crystal of importData.crystals) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.crystals, crystal.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.crystals, crystal.id, crystal);
+        }
+      }
+      if (importData.facets) {
+        for (const facet of importData.facets) {
+          if (strategy === "skip") {
+            const existing = await kv.get(KV.facets, facet.id).catch(() => null);
+            if (existing) { stats.skipped++; continue; }
+          }
+          await kv.set(KV.facets, facet.id, facet);
         }
       }
 

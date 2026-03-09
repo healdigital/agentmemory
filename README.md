@@ -96,7 +96,7 @@ These agents support hooks natively. agentmemory captures tool usage automatical
 
 ### MCP support (any MCP-compatible agent)
 
-Any agent that connects to MCP servers can use agentmemory's 18 tools, 6 resources, and 3 prompts. The agent actively queries and saves memory through MCP calls.
+Any agent that connects to MCP servers can use agentmemory's 37 tools, 6 resources, and 3 prompts. The agent actively queries and saves memory through MCP calls.
 
 | Agent | How to connect |
 |---|---|
@@ -108,7 +108,7 @@ Any agent that connects to MCP servers can use agentmemory's 18 tools, 6 resourc
 
 ### REST API (any agent, any language)
 
-Agents without hooks or MCP can integrate via 49 REST endpoints directly. This works with any agent, language, or framework.
+Agents without hooks or MCP can integrate via 93 REST endpoints directly. This works with any agent, language, or framework.
 
 ```bash
 POST /agentmemory/observe       # Capture what the agent did
@@ -125,8 +125,8 @@ GET  /agentmemory/profile       # Get project intelligence
 |---|---|
 | Claude Code user | Plugin install (hooks + MCP + skills) |
 | Building a custom agent with Claude SDK | AgentSDKProvider (zero config) |
-| Using Cursor, Windsurf, or any MCP client | MCP server (18 tools + 6 resources + 3 prompts) |
-| Building your own agent framework | REST API (49 endpoints) |
+| Using Cursor, Windsurf, or any MCP client | MCP server (37 tools + 6 resources + 3 prompts) |
+| Building your own agent framework | REST API (93 endpoints) |
 | Sharing memory across multiple agents | All agents point to the same iii-engine instance |
 
 ## Quick Start
@@ -163,7 +163,7 @@ open http://localhost:3113
 {
   "status": "healthy",
   "service": "agentmemory",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "health": {
     "memory": { "heapUsed": 42000000, "heapTotal": 67000000 },
     "cpu": { "percent": 2.1 },
@@ -377,7 +377,7 @@ Collects every 30 seconds: heap usage, CPU percentage (delta sampling), event lo
 
 ## MCP Server
 
-### Tools (18)
+### Tools (37)
 
 | Tool | Description |
 |------|-------------|
@@ -399,6 +399,25 @@ Collects every 30 seconds: heap usage, CPU percentage (delta sampling), event lo
 | `memory_audit` | View the audit trail of memory operations |
 | `memory_governance_delete` | Delete specific memories with audit trail |
 | `memory_snapshot_create` | Create a git-versioned snapshot of memory state |
+| `memory_action_create` | Create actionable work items with typed dependencies |
+| `memory_action_update` | Update action status, priority, or details |
+| `memory_frontier` | Get unblocked actions ranked by priority and urgency |
+| `memory_next` | Get the single most important next action |
+| `memory_lease` | Acquire, release, or renew exclusive action leases |
+| `memory_routine_run` | Instantiate a frozen workflow routine into action chains |
+| `memory_signal_send` | Send threaded messages between agents |
+| `memory_signal_read` | Read messages for an agent with read receipts |
+| `memory_checkpoint` | Create or resolve external condition gates (CI, approval, deploy) |
+| `memory_mesh_sync` | Sync memories and actions with peer instances |
+| `memory_sentinel_create` | Create event-driven condition watchers |
+| `memory_sentinel_trigger` | Externally fire a sentinel to unblock gated actions |
+| `memory_sketch_create` | Create ephemeral action graphs for exploratory work |
+| `memory_sketch_promote` | Promote sketch actions to permanent actions |
+| `memory_crystallize` | LLM-powered compaction of completed action chains |
+| `memory_diagnose` | Health checks across all subsystems |
+| `memory_heal` | Auto-fix stuck, orphaned, and inconsistent state |
+| `memory_facet_tag` | Attach structured dimension:value tags to targets |
+| `memory_facet_query` | Query targets by facet tags with AND/OR logic |
 
 ### Resources (6)
 
@@ -527,28 +546,28 @@ ANTHROPIC_API_KEY=sk-ant-...
 # TOKEN_BUDGET=2000
 # MAX_OBS_PER_SESSION=500
 
-# Claude Code Memory Bridge (v0.4.0)
+# Claude Code Memory Bridge (v0.5.0)
 # CLAUDE_MEMORY_BRIDGE=false
 # CLAUDE_MEMORY_LINE_BUDGET=200
 
-# Standalone MCP Server (v0.4.0)
+# Standalone MCP Server (v0.5.0)
 # STANDALONE_MCP=false
 # STANDALONE_PERSIST_PATH=~/.agentmemory/standalone.json
 
-# Knowledge Graph (v0.4.0)
+# Knowledge Graph (v0.5.0)
 # GRAPH_EXTRACTION_ENABLED=false
 # GRAPH_EXTRACTION_BATCH_SIZE=10
 
-# Consolidation Pipeline (v0.4.0)
+# Consolidation Pipeline (v0.5.0)
 # CONSOLIDATION_ENABLED=false
 # CONSOLIDATION_DECAY_DAYS=30
 
-# Team Memory (v0.4.0)
+# Team Memory (v0.5.0)
 # TEAM_ID=
 # USER_ID=
 # TEAM_MODE=private
 
-# Git Snapshots (v0.4.0)
+# Git Snapshots (v0.5.0)
 # SNAPSHOT_ENABLED=false
 # SNAPSHOT_INTERVAL=3600
 # SNAPSHOT_DIR=~/.agentmemory/snapshots
@@ -556,7 +575,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ## API
 
-49 endpoints on port `3111` (43 core + 6 MCP protocol). Protected endpoints require `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set.
+93 endpoints on port `3111` (87 core + 6 MCP protocol). Protected endpoints require `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set. The table below shows a representative subset; see `src/api.ts` for the full endpoint list.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -619,7 +638,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 /plugin install agentmemory
 ```
 
-Restart Claude Code. All 12 hooks, 4 skills, and 18 MCP tools are registered automatically.
+Restart Claude Code. All 12 hooks, 4 skills, and 37 MCP tools are registered automatically.
 
 ### Plugin Commands
 
@@ -643,9 +662,9 @@ agentmemory is built on iii-engine's three primitives:
 | Prometheus / Grafana | iii OTEL + built-in health monitor |
 | Redis (circuit breaker) | In-process circuit breaker + fallback chain |
 
-**87 source files. ~11,300 LOC. 216 tests. 232KB bundled (218KB main + 14KB standalone).**
+**101 source files. ~15,000 LOC. 518 tests. 365KB bundled.**
 
-### Functions (33)
+### Functions (50)
 
 | Function | Purpose |
 |----------|---------|
@@ -670,7 +689,7 @@ agentmemory is built on iii-engine's three primitives:
 | `mem::profile` | Aggregate project profile |
 | `mem::auto-forget` | TTL expiry + contradiction detection |
 | `mem::enrich` | Unified enrichment (file context + observations + bug memories) |
-| `mem::export` / `mem::import` | Full JSON round-trip (v0.3.0 + v0.4.0 formats) |
+| `mem::export` / `mem::import` | Full JSON round-trip (v0.3.0 + v0.4.0 + v0.5.0 formats) |
 | `mem::claude-bridge-read` | Read Claude Code native MEMORY.md |
 | `mem::claude-bridge-sync` | Sync top memories back to MEMORY.md |
 | `mem::graph-extract` | LLM-powered entity extraction from observations |
@@ -685,8 +704,22 @@ agentmemory is built on iii-engine's three primitives:
 | `mem::snapshot-create` | Git commit memory state |
 | `mem::snapshot-list` | List all snapshots |
 | `mem::snapshot-restore` | Restore memory from snapshot commit |
+| `mem::action-create` / `action-update` | Dependency-aware work items with typed edges |
+| `mem::frontier` / `mem::next` | Priority-ranked unblocked action queue |
+| `mem::lease-acquire` / `release` / `renew` | TTL-based atomic agent claims |
+| `mem::routine-create` / `run` / `status` | Frozen workflow templates instantiated into action chains |
+| `mem::signal-send` / `read` / `threads` | Threaded inter-agent messaging with read receipts |
+| `mem::checkpoint-create` / `resolve` | External condition gates (CI, approval, deploy) |
+| `mem::flow-compress` | LLM-powered summarization of completed action chains |
+| `mem::mesh-register` / `sync` / `receive` | P2P sync between agentmemory instances |
+| `mem::detect-worktree` / `branch-sessions` | Git worktree detection for shared memory |
+| `mem::sentinel-create` / `trigger` / `check` | Event-driven condition watchers (webhook, timer, threshold, pattern, approval) |
+| `mem::sketch-create` / `add` / `promote` / `discard` | Ephemeral action graphs for exploratory work with auto-expiry |
+| `mem::crystallize` / `auto-crystallize` | LLM-powered compaction of completed action chains into crystal digests |
+| `mem::diagnose` / `heal` | Self-diagnosis across 8 categories with auto-fix for stuck/orphaned/stale state |
+| `mem::facet-tag` / `query` / `stats` | Multi-dimensional tagging with AND/OR queries on actions, memories, observations |
 
-### Data Model (21 KV scopes)
+### Data Model (33 KV scopes)
 
 | Scope | Stores |
 |-------|--------|
@@ -711,13 +744,25 @@ agentmemory is built on iii-engine's three primitives:
 | `mem:team:{id}:users:{uid}` | Per-user team state |
 | `mem:team:{id}:profile` | Aggregated team profile |
 | `mem:audit` | Audit trail for all operations |
+| `mem:actions` | Dependency-aware work items |
+| `mem:action-edges` | Typed edges (requires, unlocks, gated_by, etc.) |
+| `mem:leases` | TTL-based agent work claims |
+| `mem:routines` | Frozen workflow templates |
+| `mem:routine-runs` | Instantiated routine execution tracking |
+| `mem:signals` | Inter-agent messages with threading |
+| `mem:checkpoints` | External condition gates |
+| `mem:mesh` | Registered P2P sync peers |
+| `mem:sentinels` | Event-driven condition watchers |
+| `mem:sketches` | Ephemeral action graphs |
+| `mem:crystals` | Compacted action chain digests |
+| `mem:facets` | Multi-dimensional tags |
 
 ## Development
 
 ```bash
 npm run dev               # Hot reload
-npm run build             # Production build (208KB)
-npm test                  # Unit tests (216 tests, ~1s)
+npm run build             # Production build (365KB)
+npm test                  # Unit tests (518 tests, ~1s)
 npm run test:integration  # API tests (requires running services)
 ```
 

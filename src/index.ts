@@ -48,6 +48,20 @@ import { registerConsolidationPipelineFunction } from "./functions/consolidation
 import { registerTeamFunction } from "./functions/team.js";
 import { registerGovernanceFunction } from "./functions/governance.js";
 import { registerSnapshotFunction } from "./functions/snapshot.js";
+import { registerActionsFunction } from "./functions/actions.js";
+import { registerFrontierFunction } from "./functions/frontier.js";
+import { registerLeasesFunction } from "./functions/leases.js";
+import { registerRoutinesFunction } from "./functions/routines.js";
+import { registerSignalsFunction } from "./functions/signals.js";
+import { registerCheckpointsFunction } from "./functions/checkpoints.js";
+import { registerFlowCompressFunction } from "./functions/flow-compress.js";
+import { registerMeshFunction } from "./functions/mesh.js";
+import { registerBranchAwareFunction } from "./functions/branch-aware.js";
+import { registerSentinelsFunction } from "./functions/sentinels.js";
+import { registerSketchesFunction } from "./functions/sketches.js";
+import { registerCrystallizeFunction } from "./functions/crystallize.js";
+import { registerDiagnosticsFunction } from "./functions/diagnostics.js";
+import { registerFacetsFunction } from "./functions/facets.js";
 import { registerApiTriggers } from "./triggers/api.js";
 import { registerEventTriggers } from "./triggers/events.js";
 import { registerMcpEndpoints } from "./mcp/server.js";
@@ -157,6 +171,24 @@ async function main() {
 
   registerGovernanceFunction(sdk, kv);
 
+  registerActionsFunction(sdk, kv);
+  registerFrontierFunction(sdk, kv);
+  registerLeasesFunction(sdk, kv);
+  registerRoutinesFunction(sdk, kv);
+  registerSignalsFunction(sdk, kv);
+  registerCheckpointsFunction(sdk, kv);
+  registerMeshFunction(sdk, kv);
+  registerBranchAwareFunction(sdk, kv);
+  registerFlowCompressFunction(sdk, kv, provider);
+  registerSentinelsFunction(sdk, kv);
+  registerSketchesFunction(sdk, kv);
+  registerCrystallizeFunction(sdk, kv, provider);
+  registerDiagnosticsFunction(sdk, kv);
+  registerFacetsFunction(sdk, kv);
+  console.log(
+    `[agentmemory] Orchestration layer: actions, frontier, leases, routines, signals, checkpoints, flow-compress, mesh, branch-aware, sentinels, sketches, crystallize, diagnostics, facets`,
+  );
+
   const snapshotConfig = loadSnapshotConfig();
   if (snapshotConfig.enabled) {
     registerSnapshotFunction(sdk, kv, snapshotConfig.dir);
@@ -223,7 +255,7 @@ async function main() {
     `[agentmemory] Ready. ${embeddingProvider ? "Hybrid" : "BM25"} search active.`,
   );
   console.log(
-    `[agentmemory] Endpoints: 49 REST + 18 MCP tools + 6 MCP resources + 3 MCP prompts + 33 functions`,
+    `[agentmemory] Endpoints: 93 REST + 37 MCP tools + 6 MCP resources + 3 MCP prompts`,
   );
 
   const viewerPort = config.restPort + 2;

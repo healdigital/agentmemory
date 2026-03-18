@@ -45,6 +45,24 @@ export function registerHealthMonitor(
       if (result?.workers) workers = result.workers;
     } catch {}
 
+    const KV_PROBE_TIMEOUT = 5000;
+    let kvConnectivity: { status: string; latencyMs?: number; error?: string };
+    const kvStart = performance.now();
+    try {
+      await Promise.race([
+        (async () => {
+          await kv.set(KV.health, "_probe", { ts: Date.now() });
+          await kv.get(KV.health, "_probe");
+        })(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), KV_PROBE_TIMEOUT),
+        ),
+      ]);
+      kvConnectivity = { status: "ok", latencyMs: Math.round((performance.now() - kvStart) * 100) / 100 };
+    } catch {
+      kvConnectivity = { status: "error", error: "kv_probe_failed", latencyMs: Math.round((performance.now() - kvStart) * 100) / 100 };
+    }
+
     const snapshot: HealthSnapshot = {
       connectionState,
       workers,
@@ -61,6 +79,7 @@ export function registerHealthMonitor(
       },
       eventLoopLagMs,
       uptimeSeconds: uptime,
+      kvConnectivity,
       status: "healthy",
       alerts: [],
     };

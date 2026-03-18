@@ -278,8 +278,7 @@ async function main() {
     kv,
     sdk,
     secret,
-    metricsStore,
-    provider,
+    config.restPort,
   );
 
   const shutdown = async () => {

@@ -174,6 +174,7 @@ export interface HealthSnapshot {
   cpu: { userMicros: number; systemMicros: number; percent: number };
   eventLoopLagMs: number;
   uptimeSeconds: number;
+  kvConnectivity?: { status: string; latencyMs?: number; error?: string };
   status: "healthy" | "degraded" | "critical";
   alerts: string[];
 }
@@ -238,6 +239,13 @@ export interface ProjectProfile {
   summary?: string;
 }
 
+export interface ExportPagination {
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+}
+
 export interface ExportData {
   version: "0.3.0" | "0.4.0" | "0.5.0" | "0.6.0";
   exportedAt: string;
@@ -259,6 +267,7 @@ export interface ExportData {
   sketches?: Sketch[];
   crystals?: Crystal[];
   facets?: Facet[];
+  pagination?: ExportPagination;
 }
 
 export interface EmbeddingConfig {

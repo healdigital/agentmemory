@@ -14,6 +14,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
       concepts?: string[];
       files?: string[];
       ttlDays?: number;
+      sourceObservationIds?: string[];
     }) => {
       const ctx = getContext();
       if (
@@ -28,6 +29,9 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
       }
       if (data.concepts && !Array.isArray(data.concepts)) {
         return { success: false, error: "concepts must be an array" };
+      }
+      if (data.sourceObservationIds && !Array.isArray(data.sourceObservationIds)) {
+        return { success: false, error: "sourceObservationIds must be an array" };
       }
       const validTypes = new Set([
         "pattern",
@@ -77,6 +81,9 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
           version: supersededId ? supersededVersion + 1 : 1,
           parentId: supersededId,
           supersedes: supersededId ? [supersededId] : [],
+          sourceObservationIds: (data.sourceObservationIds || []).filter(
+            (id): id is string => typeof id === "string" && id.length > 0,
+          ),
           isLatest: true,
         };
 
@@ -89,6 +96,12 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
           await kv.set(KV.memories, supersededMemory.id, supersededMemory);
         }
         await kv.set(KV.memories, memory.id, memory);
+
+        if (supersededId) {
+          sdk.triggerVoid("mem::cascade-update", {
+            supersededMemoryId: supersededId,
+          });
+        }
 
         ctx.logger.info("Memory saved", {
           memId: memory.id,

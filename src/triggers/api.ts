@@ -1478,20 +1478,34 @@ export function registerApiTriggers(
           return { status_code: 400, body: { error: "Invalid 'since' date format" } };
         }
       }
-      const memories = await kv.list<import("../types.js").Memory>(KV.memories);
-      const actions = await kv.list<import("../types.js").Action>(KV.actions);
+      const project = req.query_params?.["project"] as string | undefined;
       const sinceTime = since ? new Date(since).getTime() : 0;
-      return {
-        status_code: 200,
-        body: {
-          memories: memories.filter(
-            (m) => new Date(m.updatedAt).getTime() > sinceTime,
-          ),
-          actions: actions.filter(
-            (a) => new Date(a.updatedAt).getTime() > sinceTime,
-          ),
-        },
+      const df = <T>(items: T[], field: "updatedAt" | "createdAt") =>
+        items.filter((i) => new Date((i as Record<string, unknown>)[field] as string).getTime() > sinceTime);
+      const memories = await kv.list<import("../types.js").Memory>(KV.memories);
+      let actions = await kv.list<import("../types.js").Action>(KV.actions);
+      if (project) {
+        actions = actions.filter((a) => a.project === project);
+      }
+      const body: Record<string, unknown> = {
+        memories: df(memories, "updatedAt"),
+        actions: df(actions, "updatedAt"),
       };
+      if (!project) {
+        const semantic = await kv.list<import("../types.js").SemanticMemory>(KV.semantic);
+        const procedural = await kv.list<import("../types.js").ProceduralMemory>(KV.procedural);
+        const relations = await kv.list<import("../types.js").MemoryRelation>(KV.relations);
+        const graphNodes = await kv.list<import("../types.js").GraphNode>(KV.graphNodes);
+        const graphEdges = await kv.list<import("../types.js").GraphEdge>(KV.graphEdges);
+        body.semantic = df(semantic, "updatedAt");
+        body.procedural = df(procedural, "updatedAt");
+        body.relations = df(relations, "createdAt");
+        body.graphNodes = graphNodes.filter(
+          (n) => new Date(n.updatedAt || n.createdAt).getTime() > sinceTime,
+        );
+        body.graphEdges = df(graphEdges, "createdAt");
+      }
+      return { status_code: 200, body };
     },
   );
   sdk.registerTrigger({
@@ -1802,4 +1816,26 @@ export function registerApiTriggers(
     return { status_code: 200, body: result };
   });
   sdk.registerTrigger({ type: "http", function_id: "api::facet-stats", config: { api_path: "/agentmemory/facets/stats", http_method: "GET" } });
+
+  sdk.registerFunction({ id: "api::verify" }, async (req: ApiRequest) => {
+    const denied = checkAuth(req, secret);
+    if (denied) return denied;
+    const body = req.body as Record<string, unknown>;
+    if (!body?.id || typeof body.id !== "string") return { status_code: 400, body: { error: "id is required" } };
+    const result = await sdk.trigger("mem::verify", { id: body.id });
+    return { status_code: 200, body: result };
+  });
+  sdk.registerTrigger({ type: "http", function_id: "api::verify", config: { api_path: "/agentmemory/verify", http_method: "POST" } });
+
+  sdk.registerFunction({ id: "api::cascade-update" }, async (req: ApiRequest) => {
+    const denied = checkAuth(req, secret);
+    if (denied) return denied;
+    const body = req.body as Record<string, unknown>;
+    if (!body?.supersededMemoryId || typeof body.supersededMemoryId !== "string") {
+      return { status_code: 400, body: { error: "supersededMemoryId is required" } };
+    }
+    const result = await sdk.trigger("mem::cascade-update", { supersededMemoryId: body.supersededMemoryId });
+    return { status_code: 200, body: result };
+  });
+  sdk.registerTrigger({ type: "http", function_id: "api::cascade-update", config: { api_path: "/agentmemory/cascade-update", http_method: "POST" } });
 }

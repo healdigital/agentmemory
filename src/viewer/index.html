@@ -727,7 +727,7 @@
   <div class="app-header">
     <div class="brand">
       <h1>agentmemory</h1>
-      <span class="version">v0.5.0</span>
+      <span class="version">v0.7.0</span>
     </div>
     <div class="header-right">
       <span class="dateline" id="dateline"></span>
@@ -741,6 +741,7 @@
     <button data-tab="memories">Memories</button>
     <button data-tab="timeline">Timeline</button>
     <button data-tab="sessions">Sessions</button>
+    <button data-tab="lessons">Lessons</button>
     <button data-tab="audit">Audit</button>
     <button data-tab="activity">Activity</button>
     <button data-tab="profile">Profile</button>
@@ -749,6 +750,7 @@
   <div id="view-dashboard" class="view active"></div>
   <div id="view-graph" class="view"></div>
   <div id="view-memories" class="view"></div>
+  <div id="view-lessons" class="view"></div>
   <div id="view-timeline" class="view"></div>
   <div id="view-sessions" class="view"></div>
   <div id="view-audit" class="view"></div>
@@ -803,13 +805,14 @@
 
     var state = {
       activeTab: 'dashboard',
-      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [] },
+      dashboard: { loaded: false, health: null, sessions: [], memories: [], graphStats: null, recentAudit: [], lessons: [], crystals: [] },
       graph: { loaded: false, nodes: [], edges: [], stats: null, filters: {}, selectedNode: null },
       memories: { loaded: false, items: [], search: '', typeFilter: '' },
       timeline: { loaded: false, observations: [], sessionId: '', minImportance: 0, page: 0, pageSize: 50 },
       sessions: { loaded: false, items: [], selectedId: null },
       audit: { loaded: false, entries: [], opFilter: '' },
       activity: { loaded: false, observations: [], sessions: [], typeFilter: '' },
+      lessons: { loaded: false, items: [], search: '' },
       profile: { loaded: false, projects: [], selectedProject: '', data: null },
       ws: null
     };
@@ -891,6 +894,7 @@
         case 'memories': if (!state.memories.loaded) await loadMemories(); break;
         case 'timeline': if (!state.timeline.loaded) await loadTimeline(); break;
         case 'sessions': if (!state.sessions.loaded) await loadSessions(); break;
+        case 'lessons': if (!state.lessons.loaded) await loadLessons(); break;
         case 'audit': if (!state.audit.loaded) await loadAudit(); break;
         case 'activity': if (!state.activity.loaded) await loadActivity(); break;
         case 'profile': if (!state.profile.loaded) await loadProfile(); break;
@@ -908,7 +912,9 @@
         apiGet('audit?limit=5'),
         apiGet('semantic'),
         apiGet('procedural'),
-        apiGet('relations')
+        apiGet('relations'),
+        apiGet('lessons'),
+        apiGet('crystals')
       ]);
       state.dashboard.health = results[0];
       state.dashboard.sessions = (results[1] && results[1].sessions) || [];
@@ -917,6 +923,8 @@
       state.dashboard.recentAudit = (results[4] && results[4].entries) || [];
       state.dashboard.semantic = (results[5] && results[5].facts) || (results[5] && results[5].semantic) || [];
       state.dashboard.procedural = (results[6] && results[6].procedures) || (results[6] && results[6].procedural) || [];
+      state.dashboard.lessons = (results[8] && results[8].lessons) || [];
+      state.dashboard.crystals = (results[9] && results[9].crystals) || [];
       state.dashboard.relations = (results[7] && results[7].relations) || [];
       state.dashboard.loaded = true;
       renderDashboard();
@@ -940,6 +948,10 @@
       var html = '<div class="stats-grid">';
       html += '<div class="stat-card"><div class="label">Sessions</div><div class="value">' + d.sessions.length + '</div><div class="sub">' + activeSessions + ' active</div></div>';
       html += '<div class="stat-card"><div class="label">Memories</div><div class="value">' + d.memories.length + '</div><div class="sub">latest versions</div></div>';
+      var lessonCount = (d.lessons || []).length;
+      var crystalCount = (d.crystals || []).length;
+      html += '<div class="stat-card"><div class="label">Lessons</div><div class="value">' + lessonCount + '</div><div class="sub">confidence-scored</div></div>';
+      html += '<div class="stat-card"><div class="label">Crystals</div><div class="value">' + crystalCount + '</div><div class="sub">action digests</div></div>';
       html += '<div class="stat-card"><div class="label">Graph Nodes</div><div class="value">' + nodeCount + '</div><div class="sub">' + edgeCount + ' edges</div></div>';
       html += '<div class="stat-card"><div class="label">Health</div><div class="value"><div class="health-bar"><span class="health-dot ' + dotClass + '"></span> ' + esc(healthStatus) + '</div></div>';
       html += '<div class="sub">' + esc(snap.connectionState || 'unknown') + '</div></div>';
@@ -2208,6 +2220,53 @@
       await apiPost('summarize', { sessionId: id });
       btn.textContent = 'Done';
       setTimeout(function() { btn.textContent = 'Summarize'; btn.disabled = false; }, 2000);
+    }
+
+    async function loadLessons() {
+      var el = document.getElementById('view-lessons');
+      el.innerHTML = '<div class="loading">Loading lessons...</div>';
+      var result = await apiGet('lessons');
+      state.lessons.items = (result && result.lessons) || [];
+      state.lessons.loaded = true;
+      renderLessons();
+    }
+
+    function renderLessons() {
+      var el = document.getElementById('view-lessons');
+      var items = state.lessons.items;
+      var search = state.lessons.search.toLowerCase();
+
+      if (search) {
+        items = items.filter(function(l) {
+          return (l.content + ' ' + l.context + ' ' + (l.tags || []).join(' ')).toLowerCase().indexOf(search) >= 0;
+        });
+      }
+
+      var html = '<div style="display:flex;gap:8px;margin-bottom:12px;">';
+      html += '<input class="search-input" type="text" placeholder="Search lessons..." value="' + esc(state.lessons.search) + '" oninput="state.lessons.search=this.value;renderLessons()" style="flex:1" />';
+      html += '<span style="font-size:12px;color:var(--ink-faint);align-self:center;">' + items.length + ' lessons</span>';
+      html += '</div>';
+
+      if (items.length === 0) {
+        html += '<div class="empty-state"><div class="empty-icon">&#128161;</div><p>No lessons yet</p><p style="font-size:12px;color:var(--ink-faint);font-style:italic;">Lessons are extracted from crystals or saved manually via memory_lesson_save.</p></div>';
+      } else {
+        html += '<table><thead><tr><th>Lesson</th><th>Confidence</th><th>Reinforcements</th><th>Source</th><th>Project</th><th>Updated</th></tr></thead><tbody>';
+        items.forEach(function(l) {
+          var confPct = Math.round(l.confidence * 100);
+          var confColor = confPct >= 70 ? 'var(--green)' : confPct >= 40 ? 'var(--yellow)' : 'var(--red)';
+          html += '<tr>';
+          html += '<td style="max-width:400px;">' + esc(truncate(l.content, 120)) + (l.context ? '<div style="font-size:11px;color:var(--ink-faint);margin-top:2px;">' + esc(truncate(l.context, 80)) + '</div>' : '') + '</td>';
+          html += '<td><div class="gauge" style="min-width:80px;"><div class="gauge-bar"><div class="gauge-fill" style="width:' + confPct + '%;background:' + confColor + '"></div></div><span class="gauge-value" style="font-size:11px;">' + confPct + '%</span></div></td>';
+          html += '<td style="text-align:center;">' + (l.reinforcements || 0) + '</td>';
+          html += '<td><span class="badge badge-' + (l.source === 'crystal' ? 'purple' : l.source === 'consolidation' ? 'yellow' : 'blue') + '">' + esc(l.source) + '</span></td>';
+          html += '<td style="font-size:12px;color:var(--ink-muted);">' + esc(l.project || '-') + '</td>';
+          html += '<td style="font-size:12px;color:var(--ink-muted);">' + shortTime(l.updatedAt) + '</td>';
+          html += '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      el.innerHTML = html;
     }
 
     async function loadAudit() {

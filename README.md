@@ -31,8 +31,7 @@ Every AI coding agent has the same blind spot. Session ends, memory vanishes. Yo
 The result is measurable. On 240 real observations across 30 sessions, agentmemory hits 64% Recall@10 and perfect MRR while using 92% fewer tokens than dumping everything into context. When an agent searches "database performance optimization," it finds the N+1 fix you made three weeks ago — something keyword grep literally cannot do. Memories version automatically, supersede each other, propagate staleness to related graph nodes, and sync across agent instances via P2P mesh. Your agents stop repeating mistakes. Your context stays clean. Your sessions start fast.
 
 ```bash
-npm install -g @agentmemory/agentmemory
-agentmemory   # auto-starts iii-engine, runs worker
+npx @agentmemory/agentmemory   # installs iii-engine if missing, starts everything
 ```
 
 ---
@@ -176,21 +175,22 @@ GET  /agentmemory/profile       # Get project intelligence
 
 All 12 hooks, 4 skills, and MCP server are registered automatically.
 
-### 2. Start the Worker
+### 2. Start agentmemory
 
 ```bash
-npm install -g @agentmemory/agentmemory
-agentmemory                # auto-detects and starts iii-engine
+npx @agentmemory/agentmemory
 ```
+
+This auto-installs iii-engine if missing, starts it, and runs the worker. One command.
 
 Or from source:
 
 ```bash
 git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
-docker compose up -d && npm install && npm run build && npm start
+npm install && npm run build && npm start
 ```
 
-### 3. Verify
+### 4. Verify
 
 ```bash
 curl http://localhost:3111/agentmemory/health
@@ -842,7 +842,7 @@ npm run test:integration  # API tests (requires running services)
 ### Prerequisites
 
 - Node.js >= 20
-- Docker
+- [iii-engine](https://iii.dev/docs) (`curl -fsSL https://install.iii.dev/iii/main/install.sh | sh`)
 
 ## License
 

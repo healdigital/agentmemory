@@ -26,14 +26,13 @@
 
 ---
 
-Every AI coding agent has the same blind spot. Session ends, memory vanishes. You re-explain architecture. You re-discover bugs. You re-teach preferences. Built-in memory files like CLAUDE.md and .cursorrules are 200-line sticky notes that overflow and go stale. agentmemory replaces that with a searchable, versioned, cross-agent database — 41 MCP tools, triple-stream retrieval (BM25 + vector + knowledge graph), 4-tier memory consolidation, provenance-tracked citations, and cascading staleness so retired facts never pollute your context again. One instance serves Claude Code, Cursor, Codex, Windsurf, and any MCP client simultaneously. 573 tests. Zero external DB dependencies.
+Every AI coding agent has the same blind spot. Session ends, memory vanishes. You re-explain architecture. You re-discover bugs. You re-teach preferences. Built-in memory files like CLAUDE.md and .cursorrules are 200-line sticky notes that overflow and go stale. agentmemory replaces that with a searchable, versioned, cross-agent database — 41 MCP tools, triple-stream retrieval (BM25 + vector + knowledge graph), 4-tier memory consolidation, provenance-tracked citations, and cascading staleness so retired facts never pollute your context again. One instance serves Claude Code, Cursor, Codex, Windsurf, and any MCP client simultaneously. 581 tests. Zero external DB dependencies.
 
 The result is measurable. On 240 real observations across 30 sessions, agentmemory hits 64% Recall@10 and perfect MRR while using 92% fewer tokens than dumping everything into context. When an agent searches "database performance optimization," it finds the N+1 fix you made three weeks ago — something keyword grep literally cannot do. Memories version automatically, supersede each other, propagate staleness to related graph nodes, and sync across agent instances via P2P mesh. Your agents stop repeating mistakes. Your context stays clean. Your sessions start fast.
 
 ```bash
-git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
-docker compose up -d && npm install && npm run build && npm start
-curl http://localhost:3111/agentmemory/health
+npm install -g @agentmemory/agentmemory
+agentmemory   # auto-starts iii-engine, runs worker
 ```
 
 ---
@@ -162,8 +161,8 @@ GET  /agentmemory/profile       # Get project intelligence
 |---|---|
 | Claude Code user | Plugin install (hooks + MCP + skills) |
 | Building a custom agent with Claude SDK | AgentSDKProvider (zero config) |
-| Using Cursor, Windsurf, or any MCP client | MCP server (38 tools + 6 resources + 3 prompts) |
-| Building your own agent framework | REST API (93 endpoints) |
+| Using Cursor, Windsurf, or any MCP client | MCP server (41 tools + 6 resources + 3 prompts) |
+| Building your own agent framework | REST API (100 endpoints) |
 | Sharing memory across multiple agents | All agents point to the same iii-engine instance |
 
 ## Quick Start
@@ -180,11 +179,15 @@ All 12 hooks, 4 skills, and MCP server are registered automatically.
 ### 2. Start the Worker
 
 ```bash
-git clone https://github.com/rohitg00/agentmemory.git
-cd agentmemory
+npm install -g @agentmemory/agentmemory
+agentmemory                # auto-detects and starts iii-engine
+```
 
-docker compose up -d       # Start iii-engine
-npm install && npm run build && npm start
+Or from source:
+
+```bash
+git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
+docker compose up -d && npm install && npm run build && npm start
 ```
 
 ### 3. Verify
@@ -200,7 +203,7 @@ open http://localhost:3113
 {
   "status": "healthy",
   "service": "agentmemory",
-  "version": "0.6.1",
+  "version": "0.7.1",
   "health": {
     "memory": { "heapUsed": 42000000, "heapTotal": 67000000 },
     "cpu": { "percent": 2.1 },
@@ -604,8 +607,17 @@ ANTHROPIC_API_KEY=sk-ant-...
 # GRAPH_EXTRACTION_BATCH_SIZE=10
 
 # Consolidation Pipeline (v0.5.0)
-# CONSOLIDATION_ENABLED=false
+# CONSOLIDATION_ENABLED=true
 # CONSOLIDATION_DECAY_DAYS=30
+
+# Lesson Decay (v0.7.0)
+# LESSON_DECAY_ENABLED=true
+
+# Obsidian Export (v0.7.0)
+# OBSIDIAN_AUTO_EXPORT=false
+
+# MCP Tool Visibility (v0.7.0) — "core" (7 tools) or "all" (41 tools)
+# AGENTMEMORY_TOOLS=core
 
 # Team Memory (v0.5.0)
 # TEAM_ID=
@@ -667,6 +679,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 | `GET` | `/agentmemory/snapshots` | List git snapshots |
 | `POST` | `/agentmemory/snapshot/create` | Create git-versioned snapshot |
 | `POST` | `/agentmemory/snapshot/restore` | Restore from snapshot commit |
+| `POST` | `/agentmemory/lessons` | Save a lesson (returns 201 if created, 200 if strengthened) |
+| `GET` | `/agentmemory/lessons` | List lessons (`?project=X&minConfidence=0.5`) |
+| `POST` | `/agentmemory/lessons/search` | Search lessons by query |
+| `POST` | `/agentmemory/lessons/strengthen` | Reinforce a lesson's confidence |
+| `POST` | `/agentmemory/obsidian/export` | Export vault as Obsidian Markdown |
 | `GET` | `/agentmemory/mcp/tools` | List MCP tools |
 | `POST` | `/agentmemory/mcp/call` | Execute MCP tool |
 | `GET` | `/agentmemory/mcp/resources` | List MCP resources |
@@ -707,9 +724,9 @@ agentmemory is built on iii-engine's three primitives:
 | Prometheus / Grafana | iii OTEL + built-in health monitor |
 | Redis (circuit breaker) | In-process circuit breaker + fallback chain |
 
-**105+ source files. ~16,000 LOC. 573 tests. Zero external DB dependencies.**
+**113 source files. ~20,000 LOC. 581 tests. Zero external DB dependencies.**
 
-### Functions (52)
+### Functions (57)
 
 | Function | Purpose |
 |----------|---------|
@@ -734,7 +751,7 @@ agentmemory is built on iii-engine's three primitives:
 | `mem::profile` | Aggregate project profile |
 | `mem::auto-forget` | TTL expiry + contradiction detection |
 | `mem::enrich` | Unified enrichment (file context + observations + bug memories) |
-| `mem::export` / `mem::import` | Full JSON round-trip (v0.3.0 + v0.4.0 + v0.5.0 formats) |
+| `mem::export` / `mem::import` | Full JSON round-trip (v0.3.0 – v0.7.0 formats, includes lessons) |
 | `mem::claude-bridge-read` | Read Claude Code native MEMORY.md |
 | `mem::claude-bridge-sync` | Sync top memories back to MEMORY.md |
 | `mem::graph-extract` | LLM-powered entity extraction from observations |
@@ -770,8 +787,11 @@ agentmemory is built on iii-engine's three primitives:
 | `mem::graph-retrieval` | Entity search + chunk expansion + temporal queries via knowledge graph |
 | `mem::verify` | JIT verification — trace memory provenance back to source observations |
 | `mem::cascade-update` | Propagate staleness to graph nodes, edges, and sibling memories |
+| `mem::lesson-save` / `recall` / `list` | Confidence-scored lessons with dedup, reinforcement, and decay |
+| `mem::lesson-strengthen` / `decay-sweep` | Reinforce lessons on reuse, sweep for time-based decay |
+| `mem::obsidian-export` | Export vault as Obsidian-compatible Markdown with YAML frontmatter + wikilinks |
 
-### Data Model (33 KV scopes)
+### Data Model (34 KV scopes)
 
 | Scope | Stores |
 |-------|--------|
@@ -808,19 +828,20 @@ agentmemory is built on iii-engine's three primitives:
 | `mem:sketches` | Ephemeral action graphs |
 | `mem:crystals` | Compacted action chain digests |
 | `mem:facets` | Multi-dimensional tags |
+| `mem:lessons` | Confidence-scored lessons with decay |
 
 ## Development
 
 ```bash
 npm run dev               # Hot reload
-npm run build             # Production build (365KB)
-npm test                  # Unit tests (573 tests, ~1.5s)
+npm run build             # Production build (~425KB)
+npm test                  # Unit tests (581 tests, ~1.5s)
 npm run test:integration  # API tests (requires running services)
 ```
 
 ### Prerequisites
 
-- Node.js >= 18
+- Node.js >= 20
 - Docker
 
 ## License

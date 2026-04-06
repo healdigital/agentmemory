@@ -726,70 +726,43 @@ agentmemory is built on iii-engine's three primitives:
 
 **113 source files. ~20,000 LOC. 581 tests. Zero external DB dependencies.**
 
-### Functions (57)
+### Functions (89 mem:: functions)
 
-| Function | Purpose |
-|----------|---------|
-| `mem::observe` | Store raw observation with dedup check |
-| `mem::compress` | LLM compression with validation + quality scoring + embedding |
-| `mem::search` | BM25-ranked full-text search |
-| `mem::smart-search` | Hybrid search with progressive disclosure |
-| `mem::context` | Build session context within token budget |
-| `mem::summarize` | Generate validated session summaries |
-| `mem::remember` | Save to long-term memory (auto-supersedes similar) |
-| `mem::forget` | Delete observations, sessions, or memories |
-| `mem::file-index` | File-specific observation lookup |
-| `mem::consolidate` | Merge duplicate observations |
-| `mem::patterns` | Detect recurring patterns |
-| `mem::generate-rules` | Generate CLAUDE.md rules from patterns |
-| `mem::migrate` | Import from SQLite |
-| `mem::evict` | Age + importance + cap-based memory eviction |
-| `mem::relate` | Create relationship between memories |
-| `mem::evolve` | Create new version of a memory |
-| `mem::get-related` | Traverse memory relationship graph |
-| `mem::timeline` | Chronological observations around anchor |
-| `mem::profile` | Aggregate project profile |
-| `mem::auto-forget` | TTL expiry + contradiction detection |
-| `mem::enrich` | Unified enrichment (file context + observations + bug memories) |
-| `mem::export` / `mem::import` | Full JSON round-trip (v0.3.0 – v0.7.0 formats, includes lessons) |
-| `mem::claude-bridge-read` | Read Claude Code native MEMORY.md |
-| `mem::claude-bridge-sync` | Sync top memories back to MEMORY.md |
-| `mem::graph-extract` | LLM-powered entity extraction from observations |
-| `mem::graph-query` | BFS traversal of knowledge graph |
-| `mem::graph-stats` | Node/edge counts by type |
-| `mem::consolidate-pipeline` | 4-tier memory consolidation with strength decay |
-| `mem::team-share` | Share memory/observation with team namespace |
-| `mem::team-feed` | Fetch recent shared items from team |
-| `mem::team-profile` | Aggregate team concepts, files, patterns |
-| `mem::governance-delete` | Delete specific memories with audit trail |
-| `mem::governance-bulk` | Bulk delete by type/date/quality filter |
-| `mem::snapshot-create` | Git commit memory state |
-| `mem::snapshot-list` | List all snapshots |
-| `mem::snapshot-restore` | Restore memory from snapshot commit |
-| `mem::action-create` / `action-update` | Dependency-aware work items with typed edges |
-| `mem::frontier` / `mem::next` | Priority-ranked unblocked action queue |
-| `mem::lease-acquire` / `release` / `renew` | TTL-based atomic agent claims |
-| `mem::routine-create` / `run` / `status` | Frozen workflow templates instantiated into action chains |
-| `mem::signal-send` / `read` / `threads` | Threaded inter-agent messaging with read receipts |
-| `mem::checkpoint-create` / `resolve` | External condition gates (CI, approval, deploy) |
-| `mem::flow-compress` | LLM-powered summarization of completed action chains |
-| `mem::mesh-register` / `sync` / `receive` | P2P sync between agentmemory instances |
-| `mem::detect-worktree` / `branch-sessions` | Git worktree detection for shared memory |
-| `mem::sentinel-create` / `trigger` / `check` | Event-driven condition watchers (webhook, timer, threshold, pattern, approval) |
-| `mem::sketch-create` / `add` / `promote` / `discard` | Ephemeral action graphs for exploratory work with auto-expiry |
-| `mem::crystallize` / `auto-crystallize` | LLM-powered compaction of completed action chains into crystal digests |
-| `mem::diagnose` / `heal` | Self-diagnosis across 8 categories with auto-fix for stuck/orphaned/stale state |
-| `mem::facet-tag` / `query` / `stats` | Multi-dimensional tagging with AND/OR queries on actions, memories, observations |
-| `mem::expand-query` | LLM-generated query reformulations for improved recall |
-| `mem::sliding-window` | Context-window enrichment at ingestion (resolve pronouns, abbreviations) |
-| `mem::temporal-graph` | Append-only versioned edges with point-in-time queries |
-| `mem::retention-score` / `evict` | Ebbinghaus-inspired decay with tiered storage (hot/warm/cold/evictable) |
-| `mem::graph-retrieval` | Entity search + chunk expansion + temporal queries via knowledge graph |
-| `mem::verify` | JIT verification — trace memory provenance back to source observations |
-| `mem::cascade-update` | Propagate staleness to graph nodes, edges, and sibling memories |
-| `mem::lesson-save` / `recall` / `list` | Confidence-scored lessons with dedup, reinforcement, and decay |
-| `mem::lesson-strengthen` / `decay-sweep` | Reinforce lessons on reuse, sweep for time-based decay |
-| `mem::obsidian-export` | Export vault as Obsidian-compatible Markdown with YAML frontmatter + wikilinks |
+| Category | Functions | Purpose |
+|----------|-----------|---------|
+| **Core Memory** | `observe`, `compress`, `search`, `smart-search` | Capture, compress, and search observations |
+| | `context`, `summarize`, `remember`, `forget` | Build context, generate summaries, save/delete memories |
+| | `file-context`, `enrich`, `patterns`, `generate-rules` | File history, enrichment, pattern detection, rule generation |
+| | `migrate`, `export`, `import` | SQLite migration, JSON round-trip (v0.3.0–v0.7.2) |
+| **Search** | `expand-query`, `sliding-window`, `graph-retrieval` | Query reformulations, context enrichment, entity-based retrieval |
+| | `retention-score`, `retention-evict` | Ebbinghaus decay with tiered storage (hot/warm/cold) |
+| **Memory Evolution** | `evolve`, `auto-forget`, `evict` | Version memories, TTL expiry, importance-based eviction |
+| | `consolidate`, `consolidate-pipeline` | Merge duplicates, 4-tier consolidation (working→episodic→semantic→procedural) |
+| | `verify`, `cascade-update` | Citation chain provenance, staleness propagation |
+| **Knowledge Graph** | `graph-extract`, `graph-query`, `graph-stats` | LLM entity extraction, BFS traversal, statistics |
+| | `temporal-graph` | Append-only versioned edges with point-in-time queries |
+| **Relationships** | `relate`, `get-related`, `timeline`, `profile` | Memory relations, chronological view, project profiles |
+| **Claude Bridge** | `claude-bridge-read`, `claude-bridge-sync` | Bi-directional sync with MEMORY.md |
+| **Actions** | `action-create`, `action-update`, `action-get`, `action-list` | Dependency-aware work items with typed edges |
+| | `action-edge-create` | Create typed edges between actions (requires, unlocks, gated_by) |
+| | `frontier`, `next` | Priority-ranked unblocked action queue |
+| **Leases** | `lease-acquire`, `lease-release`, `lease-renew`, `lease-cleanup` | TTL-based atomic agent claims with auto-cleanup |
+| **Routines** | `routine-create`, `routine-freeze`, `routine-list`, `routine-run`, `routine-status` | Frozen workflow templates instantiated into action chains |
+| **Signals** | `signal-send`, `signal-read`, `signal-threads`, `signal-cleanup` | Threaded inter-agent messaging with read receipts |
+| **Checkpoints** | `checkpoint-create`, `checkpoint-resolve`, `checkpoint-list`, `checkpoint-expire` | External condition gates (CI, approval, deploy) |
+| **Mesh** | `mesh-register`, `mesh-sync`, `mesh-receive`, `mesh-list`, `mesh-remove` | P2P sync between agentmemory instances |
+| **Sentinels** | `sentinel-create`, `sentinel-trigger`, `sentinel-check`, `sentinel-cancel`, `sentinel-list`, `sentinel-expire` | Event-driven condition watchers |
+| **Sketches** | `sketch-create`, `sketch-add`, `sketch-promote`, `sketch-discard`, `sketch-list`, `sketch-gc` | Ephemeral action graphs with auto-expiry |
+| **Crystals** | `crystallize`, `auto-crystallize`, `crystal-list`, `crystal-get` | LLM-powered compaction of action chains into digests |
+| **Lessons** | `lesson-save`, `lesson-recall`, `lesson-list`, `lesson-strengthen`, `lesson-decay-sweep` | Confidence-scored lessons with dedup, reinforcement, and decay |
+| **Facets** | `facet-tag`, `facet-untag`, `facet-query`, `facet-get`, `facet-stats`, `facet-dimensions` | Multi-dimensional tagging with AND/OR queries |
+| **Diagnostics** | `diagnose`, `heal` | Self-diagnosis across 8 categories with auto-fix |
+| **Flow** | `flow-compress` | LLM summarization of completed action chains |
+| **Branch** | `detect-worktree`, `list-worktrees`, `branch-sessions` | Git worktree detection for shared memory |
+| **Team** | `team-share`, `team-feed`, `team-profile` | Namespaced shared + private team memory |
+| **Governance** | `governance-delete`, `governance-bulk`, `audit-query` | Delete with audit trail, bulk operations |
+| **Snapshots** | `snapshot-create`, `snapshot-list`, `snapshot-restore` | Git-versioned memory state |
+| **Export** | `obsidian-export` | Obsidian-compatible Markdown with YAML frontmatter + wikilinks |
 
 ### Data Model (34 KV scopes)
 

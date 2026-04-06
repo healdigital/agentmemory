@@ -30,6 +30,15 @@
     "context",
     "observation"
   ],
+  "files": [
+    "dist/",
+    "plugin/",
+    "iii-config.yaml",
+    "docker-compose.yml",
+    "LICENSE",
+    "README.md",
+    "AGENTS.md"
+  ],
   "author": "Rohit Ghumare <ghumare64@gmail.com>",
   "license": "Apache-2.0",
   "repository": {

@@ -154,7 +154,7 @@ export function registerCrystallizeFunction(
       const dryRun = data.dryRun ?? false;
       const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
 
-      let allActions = await kv.list<CrystallizableAction>(KV.actions);
+      let allActions = await kv.list<Action>(KV.actions);
 
       allActions = allActions.filter(
         (a) =>

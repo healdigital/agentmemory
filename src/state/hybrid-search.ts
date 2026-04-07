@@ -13,6 +13,7 @@ import {
   type GraphRetrievalResult,
 } from "../functions/graph-retrieval.js";
 import { extractEntitiesFromQuery } from "../functions/query-expansion.js";
+import { rerank } from "./reranker.js";
 
 const RRF_K = 60;
 
@@ -27,6 +28,7 @@ export class HybridSearch {
     private bm25Weight = 0.4,
     private vectorWeight = 0.6,
     private graphWeight = 0.3,
+    private rerankEnabled = process.env.RERANK_ENABLED === "true",
   ) {
     this.graphRetrieval = new GraphRetrieval(kv);
   }
@@ -215,8 +217,24 @@ export class HybridSearch {
     }));
 
     combined.sort((a, b) => b.combinedScore - a.combinedScore);
-    const diversified = this.diversifyBySession(combined, limit);
-    return this.enrichResults(diversified, limit);
+
+    const retrievalDepth = Math.max(limit, 20);
+    const rerankWindow = 20;
+    const diversified = this.diversifyBySession(combined, retrievalDepth);
+    const enriched = await this.enrichResults(diversified, retrievalDepth);
+
+    if (this.rerankEnabled && enriched.length > 1) {
+      try {
+        const head = enriched.slice(0, rerankWindow);
+        const tail = enriched.slice(rerankWindow);
+        const reranked = await rerank(query, head, rerankWindow);
+        return reranked.concat(tail).slice(0, limit);
+      } catch {
+        return enriched.slice(0, limit);
+      }
+    }
+
+    return enriched.slice(0, limit);
   }
 
   private diversifyBySession(

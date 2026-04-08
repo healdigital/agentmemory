@@ -9,5 +9,5 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/rohitg00/agentmemory",
   "repository": "https://github.com/rohitg00/agentmemory",
-  "skills": ["../skills/recall", "../skills/remember", "../skills/session-history", "../skills/forget"]
+  "skills": ["../skills/"]
 }

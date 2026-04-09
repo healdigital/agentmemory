@@ -120,11 +120,33 @@ export function registerApiTriggers(
   sdk.registerFunction(
     { id: "api::search" },
     async (
-      req: ApiRequest<{ query: string; limit?: number }>,
+      req: ApiRequest<{ query: string; limit?: number; project?: string; cwd?: string }>,
     ): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      const result = await sdk.trigger("mem::search", req.body);
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      if (typeof body.query !== "string" || !body.query.trim()) {
+        return { status_code: 400, body: { error: "query is required and must be a non-empty string" } };
+      }
+      if (
+        body.limit !== undefined &&
+        (!Number.isInteger(body.limit) || (body.limit as number) < 1)
+      ) {
+        return { status_code: 400, body: { error: "limit must be a positive integer" } };
+      }
+      if (body.project !== undefined && typeof body.project !== "string") {
+        return { status_code: 400, body: { error: "project must be a string" } };
+      }
+      if (body.cwd !== undefined && typeof body.cwd !== "string") {
+        return { status_code: 400, body: { error: "cwd must be a string" } };
+      }
+      const payload = {
+        query: body.query.trim(),
+        limit: body.limit as number | undefined,
+        project: body.project as string | undefined,
+        cwd: body.cwd as string | undefined,
+      };
+      const result = await sdk.trigger("mem::search", payload);
       return { status_code: 200, body: result };
     },
   );

@@ -54,26 +54,84 @@ export async function rebuildIndex(kv: StateKV): Promise<number> {
 export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction(
     { id: 'mem::search', description: 'Search observations by keyword' },
-    async (data: { query: string; limit?: number }) => {
+    async (data: { query: string; limit?: number; project?: string; cwd?: string }) => {
       const ctx = getContext()
       const idx = getSearchIndex()
+
+      // Input validation / normalization.
+      if (typeof data?.query !== 'string' || !data.query.trim()) {
+        throw new Error('mem::search: query must be a non-empty string')
+      }
+      const query = data.query.trim()
+      const MAX_LIMIT = 100
+      let effectiveLimit = 20
+      if (data.limit !== undefined) {
+        if (!Number.isInteger(data.limit) || data.limit < 1) {
+          throw new Error('mem::search: limit must be a positive integer')
+        }
+        effectiveLimit = Math.min(data.limit, MAX_LIMIT)
+      }
+      const projectFilter = typeof data.project === 'string' && data.project.length > 0 ? data.project : undefined
+      const cwdFilter = typeof data.cwd === 'string' && data.cwd.length > 0 ? data.cwd : undefined
 
       if (idx.size === 0) {
         const count = await rebuildIndex(kv)
         ctx.logger.info('Search index rebuilt', { entries: count })
       }
 
-      const results = idx.search(data.query, data.limit || 20)
+      // When filtering by project/cwd, over-fetch from the index so the
+      // post-filter still has a chance of returning `effectiveLimit` results.
+      const filtering = !!(projectFilter || cwdFilter)
+      const fetchLimit = filtering ? Math.max(effectiveLimit * 10, 100) : effectiveLimit
+      const results = idx.search(query, fetchLimit)
 
-      const enriched: SearchResult[] = []
+      // Resolve session -> project/cwd once per sessionId we touch.
+      const sessionCache = new Map<string, Session | null>()
+      const loadSession = async (sessionId: string): Promise<Session | null> => {
+        if (sessionCache.has(sessionId)) return sessionCache.get(sessionId)!
+        const s = await kv.get<Session>(KV.sessions, sessionId)
+        sessionCache.set(sessionId, s ?? null)
+        return s ?? null
+      }
+
+      // First pass: filter by session (sequential — benefits from session cache).
+      const candidates: typeof results = []
       for (const r of results) {
-        const obs = await kv.get<CompressedObservation>(KV.observations(r.sessionId), r.obsId)
+        if (candidates.length >= effectiveLimit) break
+        if (filtering) {
+          const s = await loadSession(r.sessionId)
+          if (!s) continue
+          if (projectFilter && s.project !== projectFilter) continue
+          if (cwdFilter && s.cwd !== cwdFilter) continue
+        }
+        candidates.push(r)
+      }
+
+      // Second pass: load observations in parallel.
+      const obsResults = await Promise.all(
+        candidates.map((r) =>
+          kv.get<CompressedObservation>(KV.observations(r.sessionId), r.obsId)
+        )
+      )
+      const enriched: SearchResult[] = []
+      for (let i = 0; i < candidates.length; i++) {
+        const obs = obsResults[i]
         if (obs) {
-          enriched.push({ observation: obs, score: r.score, sessionId: r.sessionId })
+          enriched.push({
+            observation: obs,
+            score: candidates[i].score,
+            sessionId: candidates[i].sessionId,
+          })
         }
       }
 
-      ctx.logger.info('Search completed', { query: data.query, results: enriched.length })
+      // Avoid logging raw cwd/project (host paths). Log only that filters were active.
+      ctx.logger.info('Search completed', {
+        query,
+        results: enriched.length,
+        hasProjectFilter: !!projectFilter,
+        hasCwdFilter: !!cwdFilter,
+      })
       return { results: enriched }
     }
   )

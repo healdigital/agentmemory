@@ -94,18 +94,34 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         return s ?? null
       }
 
-      const enriched: SearchResult[] = []
+      // First pass: filter by session (sequential — benefits from session cache).
+      const candidates: typeof results = []
       for (const r of results) {
-        if (enriched.length >= effectiveLimit) break
+        if (candidates.length >= effectiveLimit) break
         if (filtering) {
           const s = await loadSession(r.sessionId)
           if (!s) continue
           if (projectFilter && s.project !== projectFilter) continue
           if (cwdFilter && s.cwd !== cwdFilter) continue
         }
-        const obs = await kv.get<CompressedObservation>(KV.observations(r.sessionId), r.obsId)
+        candidates.push(r)
+      }
+
+      // Second pass: load observations in parallel.
+      const obsResults = await Promise.all(
+        candidates.map((r) =>
+          kv.get<CompressedObservation>(KV.observations(r.sessionId), r.obsId)
+        )
+      )
+      const enriched: SearchResult[] = []
+      for (let i = 0; i < candidates.length; i++) {
+        const obs = obsResults[i]
         if (obs) {
-          enriched.push({ observation: obs, score: r.score, sessionId: r.sessionId })
+          enriched.push({
+            observation: obs,
+            score: candidates[i].score,
+            sessionId: candidates[i].sessionId,
+          })
         }
       }
 

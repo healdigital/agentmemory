@@ -241,6 +241,12 @@ Add to `.opencode/config.json`:
 }
 ```
 
+**Any agent via SkillKit (32+ agents supported):**
+
+```bash
+npx skillkit install agentmemory
+```
+
 **REST API (any agent, any language):**
 
 ```bash
@@ -297,6 +303,54 @@ If you prefer not to use the plugin, add hooks directly to `~/.claude/settings.j
   }
 }
 ```
+
+## First Steps After Install
+
+Once hooks are installed, memory builds silently. No action needed — just use your agent normally.
+
+### Session 1: Your agent works as usual
+
+```text
+You: "Add JWT auth to the Express API"
+Agent: reads files, writes code, runs tests, fixes errors
+```
+
+agentmemory captures every tool use via PostToolUse hooks. At session end, 47 raw observations compress into structured memory:
+
+```json
+{
+  "type": "file_edit",
+  "title": "Implement JWT middleware with jose",
+  "facts": ["Using jose library for Edge compatibility", "JWT tokens expire after 30 days", "Middleware in src/middleware/auth.ts"],
+  "concepts": ["jwt", "authentication", "jose", "middleware"],
+  "files": ["src/middleware/auth.ts", "src/app/api/auth/route.ts"],
+  "importance": 9
+}
+```
+
+### Session 2: The payoff
+
+You start a new session. Before the agent responds, the SessionStart hook fires and injects context (~1,900 tokens):
+
+```text
+Agent already knows:
+  - Auth uses jose JWT middleware in src/middleware/auth.ts
+  - Tests in test/auth.test.ts cover token validation
+  - You chose jose over jsonwebtoken for Edge compatibility
+  - Rate limiting discussion from last week's debugging session
+```
+
+No re-explaining. The agent starts working immediately.
+
+### How to verify it's working
+
+```bash
+npx @agentmemory/agentmemory status   # quick terminal check
+curl http://localhost:3111/agentmemory/health
+open http://localhost:3113              # real-time viewer
+```
+
+After 1 session: check the Timeline tab in the viewer. After 2+ sessions: check Dashboard for memory count > 0 and the Token Savings card.
 
 ## How It Works
 

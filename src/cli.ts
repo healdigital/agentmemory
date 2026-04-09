@@ -13,7 +13,11 @@ if (args.includes("--help") || args.includes("-h")) {
   console.log(`
 agentmemory — persistent memory for AI coding agents
 
-Usage: agentmemory [options]
+Usage: agentmemory [command] [options]
+
+Commands:
+  (default)          Start agentmemory worker
+  status             Show connection status, memory count, and health
 
 Options:
   --help, -h         Show this help
@@ -21,15 +25,10 @@ Options:
   --no-engine        Skip auto-starting iii-engine
   --port <N>         Override REST port (default: 3111)
 
-Environment:
-  AGENTMEMORY_TOOLS=all        Expose all 41 MCP tools
-  AGENTMEMORY_SECRET=xxx       Auth secret for REST/MCP
-  CONSOLIDATION_ENABLED=true   Enable auto-consolidation (off by default)
-  OBSIDIAN_AUTO_EXPORT=true    Auto-export on consolidation
-
 Quick start:
-  npx @agentmemory/agentmemory    # installs iii if missing, starts everything
-  npx agentmemory-mcp             # standalone MCP server (no engine needed)
+  npx @agentmemory/agentmemory          # start everything
+  npx @agentmemory/agentmemory status   # check health
+  npx agentmemory-mcp                   # standalone MCP (no engine)
 `);
   process.exit(0);
 }
@@ -245,7 +244,62 @@ async function main() {
   await import("./index.js");
 }
 
-main().catch((err) => {
-  p.log.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-});
+async function runStatus() {
+  const port = getRestPort();
+  const base = `http://localhost:${port}`;
+  p.intro("agentmemory status");
+
+  const up = await isEngineRunning();
+  if (!up) {
+    p.log.error(`Not running — no response on port ${port}`);
+    p.log.info("Start with: npx @agentmemory/agentmemory");
+    process.exit(1);
+  }
+
+  try {
+    const [healthRes, sessionsRes, graphRes] = await Promise.all([
+      fetch(`${base}/agentmemory/health`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
+      fetch(`${base}/agentmemory/sessions`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
+      fetch(`${base}/agentmemory/graph/stats`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
+    ]);
+
+    const h = healthRes?.health;
+    const status = healthRes?.status || "unknown";
+    const version = healthRes?.version || "?";
+    const sessions = Array.isArray(sessionsRes?.sessions) ? sessionsRes.sessions.length : 0;
+    const memories = h?.workers?.[0]?.function_count || 0;
+    const nodes = graphRes?.nodes || 0;
+    const edges = graphRes?.edges || 0;
+    const cb = healthRes?.circuitBreaker?.state || "closed";
+    const heapMB = h?.memory ? Math.round(h.memory.heapUsed / 1048576) : 0;
+    const uptime = h?.uptimeSeconds ? Math.round(h.uptimeSeconds) : 0;
+
+    p.log.success(`Connected — v${version} on port ${port}`);
+
+    const lines = [
+      `Health:     ${status === "healthy" ? "healthy" : status}`,
+      `Sessions:   ${sessions}`,
+      `Graph:      ${nodes} nodes, ${edges} edges`,
+      `Circuit:    ${cb}`,
+      `Heap:       ${heapMB} MB`,
+      `Uptime:     ${uptime}s`,
+      `Viewer:     http://localhost:${port + 2}`,
+    ];
+    p.note(lines.join("\n"), "agentmemory");
+  } catch (err) {
+    p.log.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  }
+}
+
+if (args[0] === "status") {
+  runStatus().catch((err) => {
+    p.log.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+} else {
+  main().catch((err) => {
+    p.log.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
+}

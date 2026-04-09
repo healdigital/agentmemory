@@ -40,6 +40,35 @@
       --font-ui: 'Inter', -apple-system, sans-serif;
       --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
     }
+    html[data-theme="dark"] {
+      --bg: #1a1a1e;
+      --bg-alt: #232328;
+      --bg-inset: #2a2a30;
+      --border: #444;
+      --border-light: #3a3a42;
+      --border-heavy: #ccc;
+      --ink: #eee;
+      --ink-secondary: #ccc;
+      --ink-muted: #999;
+      --ink-faint: #777;
+      --cream: #2a2520;
+    }
+    html[data-theme="dark"] body {
+      background-image: radial-gradient(circle, #3a3a42 0.5px, transparent 0.5px);
+    }
+    html[data-theme="dark"] .graph-tooltip {
+      background: rgba(30,30,35,0.92);
+      border-color: rgba(255,255,255,0.1);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    html[data-theme="dark"] .graph-controls button {
+      background: rgba(30,30,35,0.92);
+      border-color: rgba(255,255,255,0.1);
+    }
+    html[data-theme="dark"] .graph-controls button:hover {
+      background: var(--ink);
+      color: var(--bg);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: var(--font-body);
@@ -422,6 +451,7 @@
     }
     .obs-card .obs-facts li { margin-bottom: 2px; }
     .tag-list { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+    mark { background: rgba(204, 0, 0, 0.12); color: var(--ink); padding: 0 2px; border-radius: 2px; }
     .tag {
       font-size: 10px;
       padding: 1px 6px;
@@ -735,6 +765,7 @@
     </div>
     <div class="header-right">
       <span class="dateline" id="dateline"></span>
+      <button id="theme-toggle" class="btn" style="font-size:9px;padding:3px 10px;letter-spacing:0.1em;margin-right:8px;" onclick="toggleTheme()">DARK</button>
       <span id="ws-status" class="ws-status disconnected">live updates off</span>
     </div>
   </div>
@@ -781,6 +812,21 @@
 
     var dateEl = document.getElementById('dateline');
     if (dateEl) dateEl.textContent = new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+
+    function isDarkMode() { return document.documentElement.dataset.theme === 'dark'; }
+    function applyTheme(dark, persist) {
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.textContent = dark ? 'LIGHT' : 'DARK';
+      if (persist) localStorage.setItem('agentmemory-theme', dark ? 'dark' : 'light');
+    }
+    window.toggleTheme = function() { applyTheme(!isDarkMode(), true); };
+    var savedTheme = localStorage.getItem('agentmemory-theme');
+    if (savedTheme) {
+      applyTheme(savedTheme === 'dark', false);
+    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      applyTheme(true, false);
+    }
 
     var NODE_COLORS = {
       file: '#2D6A4F', function: '#1D4E89', concept: '#B8860B', error: '#CC0000',
@@ -974,6 +1020,13 @@
         html += '<div class="stat-card"><div class="label">Circuit Breaker</div><div class="value"><span class="cb-indicator ' + cbClass + '">' + esc(cb.state) + '</span></div>';
         html += '<div class="sub">' + (cb.failures || 0) + ' failures</div></div>';
       }
+      var totalObs = d.sessions.reduce(function(a, s) { return a + (s.observationCount || 0); }, 0);
+      var tokenBudget = parseInt(new URLSearchParams(window.location.search).get('tokenBudget') || '2000', 10) || 2000;
+      var estFull = totalObs * 80;
+      var estInjected = d.sessions.length * tokenBudget;
+      var savings = estFull > 0 ? Math.round((1 - estInjected / Math.max(estFull, 1)) * 100) : 0;
+      if (savings < 0) savings = 0;
+      html += '<div class="stat-card"><div class="label">Token Savings</div><div class="value">' + savings + '%</div><div class="sub">~' + estInjected.toLocaleString() + ' vs ~' + estFull.toLocaleString() + ' full (budget: ' + tokenBudget + ')</div></div>';
       html += '</div>';
 
       if (snap.memory || snap.cpu) {
@@ -1604,7 +1657,7 @@
       // --- Canvas grid background ---
       var gridSize = 24;
       ctx.save();
-      ctx.strokeStyle = 'rgba(0,0,0,0.04)';
+      ctx.strokeStyle = isDarkMode() ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)';
       ctx.lineWidth = 0.5;
       for (var gx = 0; gx < w; gx += gridSize) {
         ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
@@ -1705,7 +1758,7 @@
         if (showEdgeLabel) {
           var zoomInv = 1 / graphSim.zoom;
           ctx.save();
-          ctx.fillStyle = isConnectedToFocus ? 'rgba(17,17,17,0.85)' : 'rgba(80,80,80,0.7)';
+          ctx.fillStyle = isDarkMode() ? (isConnectedToFocus ? 'rgba(238,238,238,0.9)' : 'rgba(180,180,180,0.7)') : (isConnectedToFocus ? 'rgba(17,17,17,0.85)' : 'rgba(80,80,80,0.7)');
           ctx.font = (isConnectedToFocus ? '600 ' : '500 ') + (11 * zoomInv).toFixed(1) + 'px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText(e.type, cpx, cpy - (4 * zoomInv));
@@ -1788,16 +1841,16 @@
           var labelH = 20 * zoomInv;
           var labelY = n.y + n.r + (8 * zoomInv); // Top of the background pill
           
-          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.fillStyle = isDarkMode() ? 'rgba(30,30,35,0.92)' : 'rgba(255,255,255,0.92)';
           ctx.beginPath();
           ctx.roundRect ? ctx.roundRect(n.x - labelW / 2, labelY, labelW, labelH, 4 * zoomInv) : ctx.rect(n.x - labelW / 2, labelY, labelW, labelH);
           ctx.fill();
           
-          ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+          ctx.strokeStyle = isDarkMode() ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
           ctx.lineWidth = 1 * zoomInv;
           ctx.stroke();
-          
-          ctx.fillStyle = isSelected || isHovered ? '#111111' : '#444444';
+
+          ctx.fillStyle = isDarkMode() ? (isSelected || isHovered ? '#eeeeee' : '#bbbbbb') : (isSelected || isHovered ? '#111111' : '#444444');
           // Vertically center text in the pill box
           ctx.fillText(label, n.x, labelY + (14 * zoomInv));
           ctx.restore();
@@ -1858,8 +1911,20 @@
           var strength = Math.round((m.strength || 0) * 100);
           var barColor = strength > 70 ? 'var(--green)' : strength > 40 ? 'var(--yellow)' : 'var(--red)';
           html += '<tr>';
+          var preview = (m.content || '').split('\n').slice(0, 2).join(' ').trim();
+          var previewHtml = esc(truncate(preview, 150));
+          if (search && search.length > 2) {
+            var re = new RegExp('(' + search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+            previewHtml = previewHtml.replace(re, '<mark>$1</mark>');
+          }
           html += '<td><span style="color:var(--ink);font-weight:600;">' + esc(truncate(m.title, 50)) + '</span>';
-          html += '<br><span style="font-size:11px;color:var(--ink-faint);font-style:italic;">' + esc(truncate(m.content, 80)) + '</span></td>';
+          html += '<div style="font-size:12px;color:var(--ink-muted);margin-top:3px;line-height:1.4;max-height:34px;overflow:hidden;">' + previewHtml + '</div>';
+          if (m.concepts && m.concepts.length > 0) {
+            html += '<div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap;">';
+            m.concepts.slice(0, 4).forEach(function(c) { html += '<span class="tag">' + esc(c) + '</span>'; });
+            html += '</div>';
+          }
+          html += '</td>';
           html += '<td><span class="badge ' + badgeClass + '">' + esc(m.type) + '</span></td>';
           html += '<td><div class="strength-bar"><div class="fill" style="width:' + strength + '%;background:' + barColor + '"></div></div> <span style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);">' + strength + '%</span></td>';
           html += '<td style="color:var(--ink-muted);font-family:var(--font-mono);font-size:12px;">v' + (m.version || 1) + '</td>';

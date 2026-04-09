@@ -64,15 +64,22 @@ That's it. Paste the block above into Claude Code. The agent handles installatio
 
 Start the memory server first: `npx @agentmemory/agentmemory`
 
+Then add the MCP config for your agent. All agents use the same server, so memories are shared across them.
+
 | Agent | Setup |
 |---|---|
+| **OpenClaw** | Add to MCP config: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
 | **Cursor** | Add to `~/.cursor/mcp.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Codex CLI** | Add to `.codex/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` |
 | **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
 | **Hermes Agent** | Add to `~/.hermes/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` or use the [memory provider plugin](integrations/hermes/) |
-| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Cline** | Add MCP server in Cline settings |
+| **Goose** | Add to `~/.config/goose/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` |
+| **Kilo Code** | Add MCP server in Kilo Code settings |
+| **Aider** | Use REST API: `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
 | **Claude Desktop** | Add to `claude_desktop_config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
 | **Any agent (32+)** | `npx skillkit install agentmemory` |
-| **REST API** | `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
 
 ---
 
@@ -214,11 +221,17 @@ Any agent that connects to MCP servers can use agentmemory's 43 tools, 6 resourc
 
 | Agent | How to connect |
 |---|---|
-| **Cursor** | Add MCP server in settings or `~/.cursor/mcp.json` |
+| **OpenClaw** (345K stars) | Add MCP server in settings |
+| **OpenCode** (100K stars) | Add to `.opencode/config.json` MCP servers |
+| **Gemini CLI** (98K stars) | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
+| **Codex CLI** (62K stars) | Add to `.codex/config.yaml` MCP servers |
+| **Cline** (59K stars) | Add MCP server in Cline settings |
+| **Cursor** (1M+ users) | Add MCP server in settings or `~/.cursor/mcp.json` |
+| **Hermes Agent** (33K stars) | MCP config or [memory provider plugin](integrations/hermes/) |
+| **Goose** (33K stars) | Add to `~/.config/goose/config.yaml` MCP servers |
+| **Kilo Code** (1.5M users) | Add MCP server in Kilo Code settings |
+| **Aider** (42K stars) | Use REST API (no MCP) |
 | **Claude Desktop** | Add to `claude_desktop_config.json` MCP servers |
-| **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
-| **OpenCode** | Add to `.opencode/config.json` MCP servers |
-| **Cline / Continue** | MCP server configuration |
 | **Any MCP client** | Point to `http://localhost:3111/agentmemory/mcp/*` |
 
 ### REST API (any agent, any language)
@@ -240,9 +253,10 @@ GET  /agentmemory/profile       # Get project intelligence
 |---|---|
 | Claude Code user | Plugin install (hooks + MCP + skills) |
 | Building a custom agent with Claude SDK | AgentSDKProvider (zero config) |
-| Using Cursor, Gemini CLI, OpenCode, or any MCP client | MCP server (43 tools + 6 resources + 3 prompts) |
+| OpenClaw, Cursor, Codex, OpenCode, Gemini CLI, Cline, Goose, Kilo Code | MCP server (43 tools + 6 resources + 3 prompts) |
+| Hermes Agent user | [Memory provider plugin](integrations/hermes/) (deeper) or MCP |
 | Building your own agent framework | REST API (103 endpoints) |
-| Sharing memory across multiple agents | All agents point to the same iii-engine instance |
+| Sharing memory across multiple agents | All agents point to the same agentmemory instance |
 
 ### From source
 

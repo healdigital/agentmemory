@@ -179,106 +179,34 @@ GET  /agentmemory/profile       # Get project intelligence
 
 ## Quick Start
 
-### 1. Start agentmemory
+### Claude Code (paste this — the agent does the rest)
 
-```bash
-npx @agentmemory/agentmemory
+```
+Install agentmemory: run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server. Then run `/plugin marketplace add rohitg00/agentmemory` and `/plugin install agentmemory` to register all 12 hooks, 4 skills, and 43 MCP tools. Verify with `curl http://localhost:3111/agentmemory/health`. The real-time viewer is at http://localhost:3113.
 ```
 
-This auto-installs iii-engine if missing, starts it, and runs the worker. One command.
+That's it. Paste the block above into Claude Code. The agent handles installation, engine startup, plugin registration, and verification.
 
-Or from source:
+### Other agents
+
+Start the memory server first: `npx @agentmemory/agentmemory`
+
+Then connect your agent:
+
+| Agent | Setup |
+|---|---|
+| **Cursor** | Add to `~/.cursor/mcp.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
+| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Claude Desktop** | Add to `claude_desktop_config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Any agent (32+)** | `npx skillkit install agentmemory` |
+| **REST API** | `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
+
+### From source
 
 ```bash
 git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
 npm install && npm run build && npm start
-```
-
-### 2. Connect your agent
-
-**Claude Code (plugin — hooks + MCP + skills):**
-
-```bash
-/plugin marketplace add rohitg00/agentmemory
-/plugin install agentmemory
-```
-
-All 12 hooks, 4 skills, and MCP server are registered automatically.
-
-**Cursor / Claude Desktop / Cline / any MCP client:**
-
-Add to your MCP config (e.g. `~/.cursor/mcp.json`, `claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "agentmemory": {
-      "command": "npx",
-      "args": ["agentmemory-mcp"]
-    }
-  }
-}
-```
-
-**Gemini CLI:**
-
-```bash
-gemini mcp add agentmemory -- npx agentmemory-mcp
-```
-
-**OpenCode:**
-
-Add to `.opencode/config.json`:
-
-```json
-{
-  "mcpServers": {
-    "agentmemory": {
-      "command": "npx",
-      "args": ["agentmemory-mcp"]
-    }
-  }
-}
-```
-
-**Any agent via SkillKit (32+ agents supported):**
-
-```bash
-npx skillkit install agentmemory
-```
-
-**REST API (any agent, any language):**
-
-```bash
-curl -X POST http://localhost:3111/agentmemory/remember \
-  -H "Content-Type: application/json" \
-  -d '{"content": "Always use jose for JWT on Edge", "type": "preference"}'
-
-curl -X POST http://localhost:3111/agentmemory/smart-search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "JWT authentication"}'
-```
-
-### 3. Verify
-
-```bash
-curl http://localhost:3111/agentmemory/health
-open http://localhost:3113   # Real-time viewer
-```
-
-```json
-{
-  "status": "healthy",
-  "service": "agentmemory",
-  "version": "0.7.7",
-  "health": {
-    "memory": { "heapUsed": 42000000, "heapTotal": 67000000 },
-    "cpu": { "percent": 2.1 },
-    "eventLoopLagMs": 1.2,
-    "status": "healthy"
-  },
-  "circuitBreaker": { "state": "closed", "failures": 0 }
-}
 ```
 
 ### Manual Hook Setup (alternative)

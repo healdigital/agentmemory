@@ -58,17 +58,32 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
       const ctx = getContext()
       const idx = getSearchIndex()
 
+      // Input validation / normalization.
+      if (typeof data?.query !== 'string' || !data.query.trim()) {
+        throw new Error('mem::search: query must be a non-empty string')
+      }
+      const query = data.query.trim()
+      const MAX_LIMIT = 100
+      let effectiveLimit = 20
+      if (data.limit !== undefined) {
+        if (!Number.isInteger(data.limit) || data.limit < 1) {
+          throw new Error('mem::search: limit must be a positive integer')
+        }
+        effectiveLimit = Math.min(data.limit, MAX_LIMIT)
+      }
+      const projectFilter = typeof data.project === 'string' && data.project.length > 0 ? data.project : undefined
+      const cwdFilter = typeof data.cwd === 'string' && data.cwd.length > 0 ? data.cwd : undefined
+
       if (idx.size === 0) {
         const count = await rebuildIndex(kv)
         ctx.logger.info('Search index rebuilt', { entries: count })
       }
 
-      const limit = data.limit || 20
       // When filtering by project/cwd, over-fetch from the index so the
-      // post-filter still has a chance of returning `limit` results.
-      const filtering = !!(data.project || data.cwd)
-      const fetchLimit = filtering ? Math.max(limit * 10, 100) : limit
-      const results = idx.search(data.query, fetchLimit)
+      // post-filter still has a chance of returning `effectiveLimit` results.
+      const filtering = !!(projectFilter || cwdFilter)
+      const fetchLimit = filtering ? Math.max(effectiveLimit * 10, 100) : effectiveLimit
+      const results = idx.search(query, fetchLimit)
 
       // Resolve session -> project/cwd once per sessionId we touch.
       const sessionCache = new Map<string, Session | null>()
@@ -81,12 +96,12 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
 
       const enriched: SearchResult[] = []
       for (const r of results) {
-        if (enriched.length >= limit) break
+        if (enriched.length >= effectiveLimit) break
         if (filtering) {
           const s = await loadSession(r.sessionId)
           if (!s) continue
-          if (data.project && s.project !== data.project) continue
-          if (data.cwd && s.cwd !== data.cwd) continue
+          if (projectFilter && s.project !== projectFilter) continue
+          if (cwdFilter && s.cwd !== cwdFilter) continue
         }
         const obs = await kv.get<CompressedObservation>(KV.observations(r.sessionId), r.obsId)
         if (obs) {
@@ -94,11 +109,12 @@ export function registerSearchFunction(sdk: ISdk, kv: StateKV): void {
         }
       }
 
+      // Avoid logging raw cwd/project (host paths). Log only that filters were active.
       ctx.logger.info('Search completed', {
-        query: data.query,
+        query,
         results: enriched.length,
-        project: data.project,
-        cwd: data.cwd,
+        hasProjectFilter: !!projectFilter,
+        hasCwdFilter: !!cwdFilter,
       })
       return { results: enriched }
     }

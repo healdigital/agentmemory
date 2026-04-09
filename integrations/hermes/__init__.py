@@ -51,12 +51,20 @@ DEFAULT_BASE_URL = "http://localhost:3111"
 TIMEOUT = 5
 
 
-def _api(base: str, path: str, body: dict | None = None, method: str = "POST") -> dict | None:
+def _validate_url(base: str) -> bool:
+    from urllib.parse import urlparse
+    parsed = urlparse(base)
+    return parsed.scheme in ("http", "https")
+
+
+def _api(base: str, path: str, body: dict | None = None, method: str = "POST", secret: str = "") -> dict | None:
+    if not _validate_url(base):
+        return None
     url = f"{base}/agentmemory/{path}"
     headers = {"Content-Type": "application/json"}
-    secret = os.environ.get("AGENTMEMORY_SECRET", "")
-    if secret:
-        headers["Authorization"] = f"Bearer {secret}"
+    auth = secret or os.environ.get("AGENTMEMORY_SECRET", "")
+    if auth:
+        headers["Authorization"] = f"Bearer {auth}"
 
     data = json.dumps(body).encode() if body else None
     req = Request(url, data=data, headers=headers, method=method)
@@ -80,6 +88,8 @@ class AgentMemoryProvider(MemoryProvider):
 
     def is_available(self) -> bool:
         base = os.environ.get("AGENTMEMORY_URL", DEFAULT_BASE_URL)
+        if not _validate_url(base):
+            return False
         try:
             req = Request(f"{base}/", method="GET")
             with urlopen(req, timeout=2):
@@ -91,7 +101,6 @@ class AgentMemoryProvider(MemoryProvider):
         self._base = os.environ.get("AGENTMEMORY_URL", DEFAULT_BASE_URL)
         self._session_id = session_id
         self._project = kwargs.get("cwd", os.getcwd())
-        self._secret = os.environ.get("AGENTMEMORY_SECRET", "")
 
         _api(self._base, "session/start", {
             "sessionId": session_id,
@@ -264,7 +273,10 @@ class AgentMemoryProvider(MemoryProvider):
             "project": self._project,
         })
         if result and result.get("context"):
-            pass
+            messages.insert(0, {
+                "role": "user",
+                "content": f"[agentmemory context before compaction]\n{result['context']}",
+            })
 
     def on_memory_write(self, action: str, target: str, content: str) -> None:
         if action in ("add", "update") and content:

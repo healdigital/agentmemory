@@ -113,9 +113,11 @@ export interface ProviderConfig {
   provider: ProviderType;
   model: string;
   maxTokens: number;
+  /** Optional base URL override (e.g. for Anthropic-compatible APIs or local proxies) */
+  baseURL?: string;
 }
 
-export type ProviderType = "agent-sdk" | "anthropic" | "gemini" | "openrouter";
+export type ProviderType = "agent-sdk" | "anthropic" | "gemini" | "openrouter" | "minimax";
 
 export interface MemoryProvider {
   name: string;

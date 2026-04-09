@@ -44,11 +44,21 @@ function loadEnvFile(): Record<string, string> {
 function detectProvider(env: Record<string, string>): ProviderConfig {
   const maxTokens = parseInt(env["MAX_TOKENS"] || "4096", 10);
 
+  // MiniMax: Anthropic-compatible API, requires raw fetch to avoid SDK stainless headers
+  if (env["MINIMAX_API_KEY"]) {
+    return {
+      provider: "minimax",
+      model: env["MINIMAX_MODEL"] || "MiniMax-M2.7",
+      maxTokens,
+    };
+  }
+
   if (env["ANTHROPIC_API_KEY"]) {
     return {
       provider: "anthropic",
       model: env["ANTHROPIC_MODEL"] || "claude-sonnet-4-20250514",
       maxTokens,
+      baseURL: env["ANTHROPIC_BASE_URL"],
     };
   }
   if (env["GEMINI_API_KEY"]) {
@@ -205,6 +215,7 @@ const VALID_PROVIDERS = new Set([
   "gemini",
   "openrouter",
   "agent-sdk",
+  "minimax",
 ]);
 
 export function loadFallbackConfig(): FallbackConfig {

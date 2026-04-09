@@ -38,6 +38,31 @@ npx @agentmemory/agentmemory   # installs iii-engine if missing, starts everythi
 
 ---
 
+## Quick Start
+
+### Claude Code (paste this — the agent does the rest)
+
+```
+Install agentmemory: run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server. Then run `/plugin marketplace add rohitg00/agentmemory` and `/plugin install agentmemory` to register all 12 hooks, 4 skills, and 43 MCP tools. Verify with `curl http://localhost:3111/agentmemory/health`. The real-time viewer is at http://localhost:3113.
+```
+
+That's it. Paste the block above into Claude Code. The agent handles installation, engine startup, plugin registration, and verification.
+
+### Other agents
+
+Start the memory server first: `npx @agentmemory/agentmemory`
+
+| Agent | Setup |
+|---|---|
+| **Cursor** | Add to `~/.cursor/mcp.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
+| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Claude Desktop** | Add to `claude_desktop_config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Any agent (32+)** | `npx skillkit install agentmemory` |
+| **REST API** | `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
+
+---
+
 ## Why agentmemory
 
 Every coding agent forgets everything when the session ends. You waste the first 5 minutes of every session re-explaining your stack, your conventions, your recent decisions. agentmemory runs in the background and eliminates that entirely.
@@ -177,59 +202,11 @@ GET  /agentmemory/profile       # Get project intelligence
 | Building your own agent framework | REST API (103 endpoints) |
 | Sharing memory across multiple agents | All agents point to the same iii-engine instance |
 
-## Quick Start
-
-### Claude Code (paste this — the agent does the rest)
-
-```
-Install agentmemory: run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server. Then run `/plugin marketplace add rohitg00/agentmemory` and `/plugin install agentmemory` to register all 12 hooks, 4 skills, and 43 MCP tools. Verify with `curl http://localhost:3111/agentmemory/health`. The real-time viewer is at http://localhost:3113.
-```
-
-That's it. Paste the block above into Claude Code. The agent handles installation, engine startup, plugin registration, and verification.
-
-### Other agents
-
-Start the memory server first: `npx @agentmemory/agentmemory`
-
-Then connect your agent:
-
-| Agent | Setup |
-|---|---|
-| **Cursor** | Add to `~/.cursor/mcp.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
-| **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
-| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
-| **Claude Desktop** | Add to `claude_desktop_config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
-| **Any agent (32+)** | `npx skillkit install agentmemory` |
-| **REST API** | `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
-
 ### From source
 
 ```bash
 git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
 npm install && npm run build && npm start
-```
-
-### Manual Hook Setup (alternative)
-
-If you prefer not to use the plugin, add hooks directly to `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "SessionStart": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/session-start.mjs" }],
-    "UserPromptSubmit": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/prompt-submit.mjs" }],
-    "PreToolUse": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/pre-tool-use.mjs" }],
-    "PostToolUse": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/post-tool-use.mjs" }],
-    "PostToolUseFailure": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/post-tool-failure.mjs" }],
-    "PreCompact": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/pre-compact.mjs" }],
-    "SubagentStart": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/subagent-start.mjs" }],
-    "SubagentStop": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/subagent-stop.mjs" }],
-    "Notification": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/notification.mjs" }],
-    "TaskCompleted": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/task-completed.mjs" }],
-    "Stop": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/stop.mjs" }],
-    "SessionEnd": [{ "type": "command", "command": "node ~/agentmemory/dist/hooks/session-end.mjs" }]
-  }
-}
 ```
 
 ## First Steps After Install

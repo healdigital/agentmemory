@@ -257,34 +257,51 @@ async function runStatus() {
   }
 
   try {
-    const [healthRes, sessionsRes, graphRes] = await Promise.all([
+    const [healthRes, sessionsRes, graphRes, memoriesRes] = await Promise.all([
       fetch(`${base}/agentmemory/health`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
       fetch(`${base}/agentmemory/sessions`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
       fetch(`${base}/agentmemory/graph/stats`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
+      fetch(`${base}/agentmemory/export`, { signal: AbortSignal.timeout(5000) }).then((r) => r.json()).catch(() => null),
     ]);
 
     const h = healthRes?.health;
     const status = healthRes?.status || "unknown";
     const version = healthRes?.version || "?";
     const sessions = Array.isArray(sessionsRes?.sessions) ? sessionsRes.sessions.length : 0;
-    const memories = h?.workers?.[0]?.function_count || 0;
     const nodes = graphRes?.nodes || 0;
     const edges = graphRes?.edges || 0;
     const cb = healthRes?.circuitBreaker?.state || "closed";
     const heapMB = h?.memory ? Math.round(h.memory.heapUsed / 1048576) : 0;
     const uptime = h?.uptimeSeconds ? Math.round(h.uptimeSeconds) : 0;
 
+    const obsCount = memoriesRes?.observations?.length || 0;
+    const memCount = memoriesRes?.memories?.length || 0;
+    const estFullTokens = obsCount * 80;
+    const estInjectedTokens = Math.min(obsCount, 50) * 38;
+    const tokensSaved = estFullTokens - estInjectedTokens;
+    const pctSaved = estFullTokens > 0 ? Math.round((tokensSaved / estFullTokens) * 100) : 0;
+
     p.log.success(`Connected — v${version} on port ${port}`);
 
     const lines = [
-      `Health:     ${status === "healthy" ? "healthy" : status}`,
-      `Sessions:   ${sessions}`,
-      `Graph:      ${nodes} nodes, ${edges} edges`,
-      `Circuit:    ${cb}`,
-      `Heap:       ${heapMB} MB`,
-      `Uptime:     ${uptime}s`,
-      `Viewer:     http://localhost:${port + 2}`,
+      `Health:       ${status === "healthy" ? "✓ healthy" : status}`,
+      `Sessions:     ${sessions}`,
+      `Observations: ${obsCount}`,
+      `Memories:     ${memCount}`,
+      `Graph:        ${nodes} nodes, ${edges} edges`,
+      `Circuit:      ${cb}`,
+      `Heap:         ${heapMB} MB`,
+      `Uptime:       ${uptime}s`,
+      `Viewer:       http://localhost:${port + 2}`,
     ];
+
+    if (obsCount > 0) {
+      lines.push("");
+      lines.push(`Token savings: ~${tokensSaved.toLocaleString()} tokens saved (${pctSaved}% reduction)`);
+      lines.push(`  Full context: ~${estFullTokens.toLocaleString()} tokens`);
+      lines.push(`  Injected:     ~${estInjectedTokens.toLocaleString()} tokens`);
+    }
+
     p.note(lines.join("\n"), "agentmemory");
   } catch (err) {
     p.log.error(err instanceof Error ? err.message : String(err));

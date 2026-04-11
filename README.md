@@ -20,10 +20,10 @@
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &bull;
-  <a href="#why-agentmemory">Why</a> &bull;
-  <a href="#benchmarks-measured-not-projected">Benchmarks</a> &bull;
+  <a href="#benchmarks">Benchmarks</a> &bull;
+  <a href="#vs-competitors">vs Competitors</a> &bull;
+  <a href="#supported-agents">Agents</a> &bull;
   <a href="#how-it-works">How It Works</a> &bull;
-  <a href="#search">Search</a> &bull;
   <a href="#mcp-server">MCP</a> &bull;
   <a href="#real-time-viewer">Viewer</a> &bull;
   <a href="#configuration">Config</a> &bull;
@@ -36,56 +36,217 @@ You explain the same architecture every session. You re-discover the same bugs. 
 
 **What changes:** Session 1 you set up JWT auth. Session 2 you ask for rate limiting. The agent already knows your auth uses jose middleware in `src/middleware/auth.ts`, your tests cover token validation, and you chose jose over jsonwebtoken for Edge compatibility. No re-explaining. No copy-pasting. The agent just *knows*.
 
-| | |
-|---|---|
-| **95.2% R@5** | [LongMemEval](https://arxiv.org/abs/2410.10813) (ICLR 2025) retrieval accuracy |
-| **92% fewer tokens** | ~1,900 injected vs ~19,000 full context ($10/yr vs $500+/yr) |
-| **43 MCP tools** | Search, remember, forget, actions, leases, signals, mesh sync |
-| **12 hooks** | Captures every tool use automatically, zero manual effort |
-| **0 external deps** | No Postgres, no Redis, no vector DB. Just iii-engine (auto-installed) |
-
 ```bash
-npx @agentmemory/agentmemory   # installs iii-engine if missing, starts everything
+npx @agentmemory/agentmemory
 ```
+
+---
+
+## Benchmarks
+
+<table>
+<tr>
+<td width="50%">
+
+### Retrieval Accuracy
+
+**LongMemEval-S** (ICLR 2025, 500 questions)
+
+| System | R@5 | R@10 | MRR |
+|---|---|---|---|
+| **agentmemory** | **95.2%** | **98.6%** | **88.2%** |
+| BM25-only fallback | 86.2% | 94.6% | 71.5% |
+
+</td>
+<td width="50%">
+
+### Token Savings
+
+| Approach | Tokens/yr | Cost/yr |
+|---|---|---|
+| Paste full context | 19.5M+ | Impossible (exceeds window) |
+| LLM-summarized | ~650K | ~$500 |
+| **agentmemory** | **~170K** | **~$10** |
+| agentmemory + local embeddings | ~170K | **$0** |
+
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td align="center"><strong>95.2%</strong><br/>Retrieval R@5</td>
+<td align="center"><strong>92% fewer</strong><br/>tokens vs full context</td>
+<td align="center"><strong>43</strong><br/>MCP tools</td>
+<td align="center"><strong>12</strong><br/>auto-capture hooks</td>
+<td align="center"><strong>0</strong><br/>external DB deps</td>
+<td align="center"><strong>646</strong><br/>tests passing</td>
+</tr>
+</table>
+
+> Embedding model: `all-MiniLM-L6-v2` (local, free, no API key). Full reports: [`benchmark/LONGMEMEVAL.md`](benchmark/LONGMEMEVAL.md), [`benchmark/QUALITY.md`](benchmark/QUALITY.md), [`benchmark/SCALE.md`](benchmark/SCALE.md)
+
+---
+
+## vs Competitors
+
+<table>
+<tr>
+<th width="20%"></th>
+<th width="20%">agentmemory</th>
+<th width="20%">mem0 (53K ⭐)</th>
+<th width="20%">Letta / MemGPT (22K ⭐)</th>
+<th width="20%">Built-in (CLAUDE.md)</th>
+</tr>
+<tr>
+<td><strong>Type</strong></td>
+<td>Memory engine + MCP server</td>
+<td>Memory layer API</td>
+<td>Full agent runtime</td>
+<td>Static file</td>
+</tr>
+<tr>
+<td><strong>Retrieval R@5</strong></td>
+<td><strong>95.2%</strong></td>
+<td>68.5% (LoCoMo)</td>
+<td>83.2% (LoCoMo)</td>
+<td>N/A (grep)</td>
+</tr>
+<tr>
+<td><strong>Auto-capture</strong></td>
+<td>12 hooks (zero manual effort)</td>
+<td>Manual <code>add()</code> calls</td>
+<td>Agent self-edits</td>
+<td>Manual editing</td>
+</tr>
+<tr>
+<td><strong>Search</strong></td>
+<td>BM25 + Vector + Graph (RRF fusion)</td>
+<td>Vector + Graph</td>
+<td>Vector (archival)</td>
+<td>Loads everything into context</td>
+</tr>
+<tr>
+<td><strong>Multi-agent</strong></td>
+<td>MCP + REST + leases + signals</td>
+<td>API (no coordination)</td>
+<td>Within Letta runtime only</td>
+<td>Per-agent files</td>
+</tr>
+<tr>
+<td><strong>Framework lock-in</strong></td>
+<td>None (any MCP client)</td>
+<td>None</td>
+<td>High (must use Letta)</td>
+<td>Per-agent format</td>
+</tr>
+<tr>
+<td><strong>External deps</strong></td>
+<td>None (SQLite + iii-engine)</td>
+<td>Qdrant / pgvector</td>
+<td>Postgres + vector DB</td>
+<td>None</td>
+</tr>
+<tr>
+<td><strong>Memory lifecycle</strong></td>
+<td>4-tier consolidation + decay + auto-forget</td>
+<td>Passive extraction</td>
+<td>Agent-managed</td>
+<td>Manual pruning</td>
+</tr>
+<tr>
+<td><strong>Token efficiency</strong></td>
+<td>~1,900 tokens/session ($10/yr)</td>
+<td>Varies by integration</td>
+<td>Core memory in context</td>
+<td>22K+ tokens at 240 obs</td>
+</tr>
+<tr>
+<td><strong>Real-time viewer</strong></td>
+<td>Yes (port 3113)</td>
+<td>Cloud dashboard</td>
+<td>Cloud dashboard</td>
+<td>No</td>
+</tr>
+<tr>
+<td><strong>Self-hosted</strong></td>
+<td>Yes (default)</td>
+<td>Optional</td>
+<td>Optional</td>
+<td>Yes</td>
+</tr>
+</table>
+
+---
+
+## Supported Agents
+
+agentmemory works with any agent that supports hooks, MCP, or REST API. All agents share the same memory server.
+
+<table>
+<tr>
+<td align="center" width="12.5%"><strong>Claude Code</strong><br/><sub>12 hooks + MCP + skills</sub></td>
+<td align="center" width="12.5%"><strong>Cursor</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>OpenClaw</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Gemini CLI</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>OpenCode</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Codex CLI</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Cline</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Hermes</strong><br/><sub>MCP + plugin</sub></td>
+</tr>
+<tr>
+<td align="center" width="12.5%"><strong>Goose</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Kilo Code</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Aider</strong><br/><sub>REST API</sub></td>
+<td align="center" width="12.5%"><strong>Claude Desktop</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Windsurf</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Roo Code</strong><br/><sub>MCP server</sub></td>
+<td align="center" width="12.5%"><strong>Claude SDK</strong><br/><sub>AgentSDKProvider</sub></td>
+<td align="center" width="12.5%"><strong>Any agent</strong><br/><sub>REST API (109 endpoints)</sub></td>
+</tr>
+</table>
 
 ---
 
 ## Quick Start
 
-### Claude Code (paste this, the agent does the rest)
+### Claude Code (one block, paste it)
 
 ```
 Install agentmemory: run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server. Then run `/plugin marketplace add rohitg00/agentmemory` and `/plugin install agentmemory` to register all 12 hooks, 4 skills, and 43 MCP tools. Verify with `curl http://localhost:3111/agentmemory/health`. The real-time viewer is at http://localhost:3113.
 ```
 
-That's it. Paste the block above into Claude Code. The agent handles installation, engine startup, plugin registration, and verification.
-
 ### Other agents
 
-Start the memory server first: `npx @agentmemory/agentmemory`
+Start the memory server: `npx @agentmemory/agentmemory`
 
-Then add the MCP config for your agent. All agents use the same server, so memories are shared across them.
+Then add the MCP config for your agent:
 
 | Agent | Setup |
 |---|---|
-| **OpenClaw** | Add to MCP config: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
 | **Cursor** | Add to `~/.cursor/mcp.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
-| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
-| **Codex CLI** | Add to `.codex/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` |
+| **OpenClaw** | Add to MCP config: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
 | **Gemini CLI** | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
-| **Hermes Agent** | Add to `~/.hermes/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` or use the [memory provider plugin](integrations/hermes/) |
-| **Cline** | Add MCP server in Cline settings |
-| **Goose** | Add to `~/.config/goose/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` |
-| **Kilo Code** | Add MCP server in Kilo Code settings |
-| **Aider** | Use REST API: `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
+| **Codex CLI** | Add to `.codex/config.yaml`: `mcp_servers: {agentmemory: {command: npx, args: ["agentmemory-mcp"]}}` |
+| **OpenCode** | Add to `.opencode/config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Hermes Agent** | Add to `~/.hermes/config.yaml` or use the [memory provider plugin](integrations/hermes/) |
+| **Cline / Goose / Kilo Code** | Add MCP server in settings |
 | **Claude Desktop** | Add to `claude_desktop_config.json`: `{"mcpServers": {"agentmemory": {"command": "npx", "args": ["agentmemory-mcp"]}}}` |
+| **Aider** | REST API: `curl -X POST http://localhost:3111/agentmemory/smart-search -d '{"query": "auth"}'` |
 | **Any agent (32+)** | `npx skillkit install agentmemory` |
+
+### From source
+
+```bash
+git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
+npm install && npm run build && npm start
+```
 
 ---
 
 ## Why agentmemory
 
-Every coding agent forgets everything when the session ends. You waste the first 5 minutes of every session re-explaining your stack, your conventions, your recent decisions. agentmemory runs in the background and eliminates that entirely.
+Every coding agent forgets everything when the session ends. You waste the first 5 minutes of every session re-explaining your stack. agentmemory runs in the background and eliminates that entirely.
 
 ```
 Session 1: "Add auth to the API"
@@ -98,473 +259,199 @@ Session 2: "Now add rate limiting"
     - Auth uses JWT middleware in src/middleware/auth.ts
     - Tests in test/auth.test.ts cover token validation
     - You chose jose over jsonwebtoken for Edge compatibility
-    - The rate limit discussion from last week's debugging session
   Zero re-explaining. Starts working immediately.
 ```
 
-### What it gives you
+### vs built-in agent memory
 
-| Capability | What it does |
-|---|---|
-| **Automatic capture** | Every tool use, file edit, test run, and error is silently recorded via hooks |
-| **LLM compression** | Raw observations are compressed into structured facts, concepts, and narratives |
-| **Context injection** | Past knowledge is injected at session start within a configurable token budget |
-| **Semantic search** | Hybrid BM25 + vector search finds relevant memories even with different wording |
-| **Memory evolution** | Memories version over time, supersede each other, and form relationship graphs |
-| **Project profiles** | Aggregated per-project intelligence: top concepts, files, conventions, common errors |
-| **Auto-forgetting** | TTL expiry, contradiction detection, and importance-based eviction keep memory clean |
-| **Privacy first** | API keys, secrets, and `<private>` tags are stripped before anything is stored |
-| **Self-healing** | Circuit breaker, provider fallback chain, self-correcting LLM output, health monitoring |
-| **Claude Code bridge** | Bi-directional sync with `~/.claude/projects/*/memory/MEMORY.md` |
-| **Cross-agent MCP** | Standalone MCP server for Cursor, Codex, Gemini CLI, Windsurf, any MCP client |
-| **Citation provenance** | JIT verification traces any memory back to source observations and sessions |
-| **Cascading staleness** | Superseded memories auto-flag related graph nodes, edges, and siblings as stale |
-| **Knowledge graph** | Entity extraction + BFS traversal across files, functions, concepts, errors |
-| **4-tier memory** | Working → episodic → semantic → procedural consolidation with strength decay |
-| **Team memory** | Namespaced shared + private memory across team members |
-| **Governance** | Edit, delete, bulk-delete, and audit trail for all memory operations |
-| **Git snapshots** | Version, rollback, and diff memory state via git commits |
+Every AI coding agent ships with built-in memory — Claude Code has `MEMORY.md`, Cursor has notepads, Cline has memory bank. These work like sticky notes. agentmemory is the searchable database behind the sticky notes.
 
-### How it compares to built-in agent memory
-
-Every AI coding agent now ships with built-in memory. Claude Code has `MEMORY.md`, Cursor has notepads, Cline has memory bank. These work like sticky notes: fast, always-on, but fundamentally limited.
-
-agentmemory is the searchable database behind the sticky notes.
-
-| | Built-in (CLAUDE.md, .cursorrules) | agentmemory |
+| | Built-in (CLAUDE.md) | agentmemory |
 |---|---|---|
-| Scale | 200-line cap (MEMORY.md) | Unlimited |
-| Search | Loads everything into context | BM25 + vector + graph (returns top-K only) |
-| Token cost | 22K+ tokens at 240 observations | ~1,900 tokens (92% less) |
-| At 1K observations | 80% of memories invisible | 100% searchable |
-| At 5K observations | Exceeds context window | Still ~2K tokens |
-| Cross-session recall | Only within line cap | Full corpus search |
-| Cross-agent | Per-agent files (no sharing) | MCP + REST API (any agent) |
-| Multi-agent coordination | Impossible | Leases, signals, actions, routines |
-| Cross-agent sync | No | P2P mesh (7 scopes: memories, actions, semantic, procedural, relations, graph) |
-| Memory trust | No verification | Citation chain back to source observations with confidence scores |
-| Semantic search | No (keyword grep) | Yes (95.2% R@5 on LongMemEval-S) |
-| Memory lifecycle | Manual pruning | Ebbinghaus decay + tiered eviction |
-| Knowledge graph | No | Entity extraction + temporal versioning |
+| Scale | 200-line cap | Unlimited |
+| Search | Loads everything into context | BM25 + vector + graph (top-K only) |
+| Token cost | 22K+ at 240 observations | ~1,900 tokens (92% less) |
+| Cross-agent | Per-agent files | MCP + REST (any agent) |
+| Coordination | None | Leases, signals, actions, routines |
 | Observability | Read files manually | Real-time viewer on :3113 |
 
-### What it costs (spoiler: almost nothing)
+---
 
-| Approach | Tokens/year | Annual cost | Notes |
-|---|---|---|---|
-| Paste full history into context | 19.5M+ | Impossible | Exceeds context window after ~200 observations |
-| LLM-summarized memory (extraction-based) | ~650K | ~$500/yr | Loses context, summarization is lossy |
-| **agentmemory context injection** | **~170K** | **~$10/yr** | Token-budgeted, only relevant memories injected |
-| agentmemory with local embeddings | ~170K | **$0** | all-MiniLM-L6-v2 runs locally, no API calls |
+## How It Works
 
-### How memory flows
+### Memory Pipeline
 
-```text
+```
 PostToolUse hook fires
   -> SHA-256 dedup (5min window)
   -> Privacy filter (strip secrets, API keys)
   -> Store raw observation
   -> LLM compress -> structured facts + concepts + narrative
-  -> Generate vector embedding
+  -> Vector embedding (6 providers + local)
   -> Index in BM25 + vector + knowledge graph
 
 SessionStart hook fires
   -> Load project profile (top concepts, files, patterns)
-  -> Hybrid search (BM25 + vector + graph) for recent context
-  -> Apply token budget (default: 2000 tokens)
-  -> Inject into conversation via stdout
+  -> Hybrid search (BM25 + vector + graph)
+  -> Token budget (default: 2000 tokens)
+  -> Inject into conversation
 ```
 
-### Benchmarks (measured, not projected)
+### 4-Tier Memory Consolidation
 
-#### LongMemEval-S (ICLR 2025, 500 questions)
+Inspired by how human brains process memory — not unlike sleep consolidation.
 
-Evaluated on [LongMemEval-S](https://arxiv.org/abs/2410.10813), an academic benchmark with 500 questions across ~48 sessions per question (~115K tokens). Same dataset and metric (`recall_any@K`) used by other memory systems.
+| Tier | What | Analogy |
+|------|------|---------|
+| **Working** | Raw observations from tool use | Short-term memory |
+| **Episodic** | Compressed session summaries | "What happened" |
+| **Semantic** | Extracted facts and patterns | "What I know" |
+| **Procedural** | Workflows and decision patterns | "How to do it" |
 
-| System | R@5 | R@10 | NDCG@10 | MRR |
-|---|---|---|---|---|
-| **agentmemory BM25+Vector** | **95.2%** | **98.6%** | **87.9%** | **88.2%** |
-| agentmemory BM25-only | 86.2% | 94.6% | 73.0% | 71.5% |
-
-These are retrieval recall scores (not end-to-end QA accuracy). Embedding model: `all-MiniLM-L6-v2` (local, no API key).
-
-#### Internal benchmark (240 observations, 20 queries)
-
-| System | Recall@10 | NDCG@10 | MRR | Tokens/query |
-|---|---|---|---|---|
-| Built-in (grep all into context) | 55.8% | 80.3% | 82.5% | 19,462 |
-| agentmemory BM25 (stemmed + synonyms) | 55.9% | 82.7% | 95.5% | 1,571 |
-| agentmemory + Xenova embeddings | **64.1%** | **94.9%** | **100.0%** | **1,571** |
-
-agentmemory finds "N+1 query fix" when you search "database performance optimization". Keyword matching can't do this.
-
-> **Methodology note:** All LongMemEval numbers are retrieval recall (`recall_any@K`), not end-to-end QA accuracy. We clearly distinguish these because the LongMemEval leaderboard measures QA accuracy (retrieve + generate + judge). No hyperparameters were tuned on the test set. Full scripts and results are committed and reproducible.
-
-Full benchmark reports: [`benchmark/LONGMEMEVAL.md`](benchmark/LONGMEMEVAL.md), [`benchmark/QUALITY.md`](benchmark/QUALITY.md), [`benchmark/SCALE.md`](benchmark/SCALE.md), [`benchmark/REAL-EMBEDDINGS.md`](benchmark/REAL-EMBEDDINGS.md)
-
-## Supported Agents
-
-agentmemory works with any agent that supports hooks, MCP, or via its REST API.
-
-### Native hook support (zero config)
-
-These agents support hooks natively. agentmemory captures tool usage automatically via its 12 hooks.
-
-| Agent | Integration | Setup |
-|---|---|---|
-| **Claude Code** | 12 hooks (all types) | `/plugin install agentmemory` or manual hook config |
-| **Claude Code SDK** | Agent SDK provider | Built-in `AgentSDKProvider` uses your Claude subscription |
-
-### MCP support (any MCP-compatible agent)
-
-Any agent that connects to MCP servers can use agentmemory's 43 tools, 6 resources, and 3 prompts. The agent actively queries and saves memory through MCP calls.
-
-| Agent | How to connect |
-|---|---|
-| **OpenClaw** (345K stars) | Add MCP server in settings |
-| **OpenCode** (100K stars) | Add to `.opencode/config.json` MCP servers |
-| **Gemini CLI** (98K stars) | `gemini mcp add agentmemory -- npx agentmemory-mcp` |
-| **Codex CLI** (62K stars) | Add to `.codex/config.yaml` MCP servers |
-| **Cline** (59K stars) | Add MCP server in Cline settings |
-| **Cursor** (1M+ users) | Add MCP server in settings or `~/.cursor/mcp.json` |
-| **Hermes Agent** (33K stars) | MCP config or [memory provider plugin](integrations/hermes/) |
-| **Goose** (33K stars) | Add to `~/.config/goose/config.yaml` MCP servers |
-| **Kilo Code** (1.5M users) | Add MCP server in Kilo Code settings |
-| **Aider** (42K stars) | Use REST API (no MCP) |
-| **Claude Desktop** | Add to `claude_desktop_config.json` MCP servers |
-| **Any MCP client** | Point to `http://localhost:3111/agentmemory/mcp/*` |
-
-### REST API (any agent, any language)
-
-Agents without hooks or MCP can integrate via 103 REST endpoints directly. This works with any agent, language, or framework.
-
-```bash
-POST /agentmemory/observe       # Capture what the agent did
-POST /agentmemory/smart-search  # Find relevant memories
-POST /agentmemory/context       # Get context for injection
-POST /agentmemory/enrich        # Get enriched context (files + memories + bugs)
-POST /agentmemory/remember      # Save long-term memory
-GET  /agentmemory/profile       # Get project intelligence
-```
-
-### Choosing an integration method
-
-| Your situation | Use |
-|---|---|
-| Claude Code user | Plugin install (hooks + MCP + skills) |
-| Building a custom agent with Claude SDK | AgentSDKProvider (zero config) |
-| OpenClaw, Cursor, Codex, OpenCode, Gemini CLI, Cline, Goose, Kilo Code | MCP server (43 tools + 6 resources + 3 prompts) |
-| Hermes Agent user | [Memory provider plugin](integrations/hermes/) (deeper) or MCP |
-| Building your own agent framework | REST API (103 endpoints) |
-| Sharing memory across multiple agents | All agents point to the same agentmemory instance |
-
-### From source
-
-```bash
-git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
-npm install && npm run build && npm start
-```
-
-## First Steps After Install
-
-Once hooks are installed, memory builds silently. No action needed. Just use your agent normally.
-
-### Session 1: Your agent works as usual
-
-```text
-You: "Add JWT auth to the Express API"
-Agent: reads files, writes code, runs tests, fixes errors
-```
-
-agentmemory captures every tool use via PostToolUse hooks. At session end, 47 raw observations compress into structured memory:
-
-```json
-{
-  "type": "file_edit",
-  "title": "Implement JWT middleware with jose",
-  "facts": ["Using jose library for Edge compatibility", "JWT tokens expire after 30 days", "Middleware in src/middleware/auth.ts"],
-  "concepts": ["jwt", "authentication", "jose", "middleware"],
-  "files": ["src/middleware/auth.ts", "src/app/api/auth/route.ts"],
-  "importance": 9
-}
-```
-
-### Session 2: The payoff
-
-You start a new session. Before the agent responds, the SessionStart hook fires and injects context (~1,900 tokens):
-
-```text
-Agent already knows:
-  - Auth uses jose JWT middleware in src/middleware/auth.ts
-  - Tests in test/auth.test.ts cover token validation
-  - You chose jose over jsonwebtoken for Edge compatibility
-  - Rate limiting discussion from last week's debugging session
-```
-
-No re-explaining. The agent starts working immediately.
-
-### How to verify it's working
-
-```bash
-npx @agentmemory/agentmemory status   # quick terminal check
-curl http://localhost:3111/agentmemory/health
-open http://localhost:3113              # real-time viewer
-```
-
-After 1 session: check the Timeline tab in the viewer. After 2+ sessions: check Dashboard for memory count > 0 and the Token Savings card.
-
-## How It Works
-
-### Observation Pipeline
-
-```
-PostToolUse hook fires
-  -> Dedup check      SHA-256 hash (5min window, no duplicates)
-  -> mem::privacy     Strip secrets, API keys, <private> tags
-  -> mem::observe     Store raw observation, push to real-time stream
-  -> mem::compress    LLM extracts: type, facts, narrative, concepts, files
-                      Validates with Zod, scores quality (0-100)
-                      Self-corrects on validation failure (1 retry)
-                      Generates vector embedding for semantic search
-```
-
-### Context Injection
-
-```
-SessionStart hook fires
-  -> mem::context     Load recent sessions for this project
-                      Hybrid search (BM25 + vector) across observations
-                      Inject project profile (top concepts, files, patterns)
-                      Apply token budget (default: 2000 tokens)
-  -> stdout           Agent receives context in the conversation
-```
+Memories decay over time (Ebbinghaus curve). Frequently accessed memories strengthen. Stale memories auto-evict. Contradictions are detected and resolved.
 
 ### What Gets Captured
 
 | Hook | Captures |
 |------|----------|
-| `SessionStart` | Project path, session ID, working directory |
+| `SessionStart` | Project path, session ID |
 | `UserPromptSubmit` | User prompts (privacy-filtered) |
-| `PreToolUse` | File access patterns + enriched context injection (Read, Write, Edit, Glob, Grep) |
+| `PreToolUse` | File access patterns + enriched context |
 | `PostToolUse` | Tool name, input, output |
-| `PostToolUseFailure` | Failed tool invocations with error context |
-| `PreCompact` | Re-injects memory context before context compaction |
-| `SubagentStart/Stop` | Sub-agent lifecycle events |
-| `Notification` | System notifications |
-| `TaskCompleted` | Task completion events |
-| `Stop` | Triggers end-of-session summary |
-| `SessionEnd` | Marks session complete |
+| `PostToolUseFailure` | Error context |
+| `PreCompact` | Re-injects memory before compaction |
+| `SubagentStart/Stop` | Sub-agent lifecycle |
+| `Stop` | End-of-session summary |
+| `SessionEnd` | Session complete marker |
+
+### Key Capabilities
+
+| Capability | Description |
+|---|---|
+| **Automatic capture** | Every tool use recorded via hooks — zero manual effort |
+| **Semantic search** | BM25 + vector + knowledge graph with RRF fusion |
+| **Memory evolution** | Versioning, supersession, relationship graphs |
+| **Auto-forgetting** | TTL expiry, contradiction detection, importance eviction |
+| **Privacy first** | API keys, secrets, `<private>` tags stripped before storage |
+| **Self-healing** | Circuit breaker, provider fallback chain, health monitoring |
+| **Claude bridge** | Bi-directional sync with MEMORY.md |
+| **Knowledge graph** | Entity extraction + BFS traversal |
+| **Team memory** | Namespaced shared + private across team members |
+| **Citation provenance** | Trace any memory back to source observations |
+| **Git snapshots** | Version, rollback, and diff memory state |
+
+---
 
 ## Search
 
-agentmemory uses triple-stream retrieval combining three signals for maximum recall.
-
-### How search works
+Triple-stream retrieval combining three signals:
 
 | Stream | What it does | When |
 |---|---|---|
-| **BM25** | Stemmed keyword matching with synonym expansion and binary-search prefix matching | Always on |
-| **Vector** | Cosine similarity over dense embeddings (Xenova, OpenAI, Gemini, Voyage, Cohere, OpenRouter) | Any embedding provider configured |
-| **Graph** | Knowledge graph traversal via entity matching and co-occurrence edges | Entities detected in query |
+| **BM25** | Stemmed keyword matching with synonym expansion | Always on |
+| **Vector** | Cosine similarity over dense embeddings | Embedding provider configured |
+| **Graph** | Knowledge graph traversal via entity matching | Entities detected in query |
 
-All three streams are fused with Reciprocal Rank Fusion (RRF, k=60) and session-diversified (max 3 results per session) to maximize coverage.
-
-**BM25 enhancements (v0.6.0):** Porter stemmer normalizes word forms ("authentication" ↔ "authenticating"), coding-domain synonyms expand queries ("db" ↔ "database", "perf" ↔ "performance"), and binary-search prefix matching replaces O(n) scans.
+Fused with Reciprocal Rank Fusion (RRF, k=60) and session-diversified (max 3 results per session).
 
 ### Embedding providers
 
-agentmemory auto-detects which provider to use. For best results, install local embeddings (no API key needed):
+agentmemory auto-detects your provider. For best results, install local embeddings (free):
 
 ```bash
 npm install @xenova/transformers
 ```
 
-| Provider | Model | Dimensions | Env Var | Notes |
-|---|---|---|---|---|
-| **Local (recommended)** | `all-MiniLM-L6-v2` | 384 | `EMBEDDING_PROVIDER=local` | Free, offline, +8pp recall over BM25-only |
-| Gemini | `text-embedding-004` | 768 | `GEMINI_API_KEY` | Free tier (1500 RPM) |
-| OpenAI | `text-embedding-3-small` | 1536 | `OPENAI_API_KEY` | $0.02/1M tokens |
-| Voyage AI | `voyage-code-3` | 1024 | `VOYAGE_API_KEY` | Optimized for code |
-| Cohere | `embed-english-v3.0` | 1024 | `COHERE_API_KEY` | Free trial available |
-| OpenRouter | Any embedding model | varies | `OPENROUTER_API_KEY` | Multi-model proxy |
+| Provider | Model | Cost | Notes |
+|---|---|---|---|
+| **Local (recommended)** | `all-MiniLM-L6-v2` | Free | Offline, +8pp recall over BM25-only |
+| Gemini | `text-embedding-004` | Free tier | 1500 RPM |
+| OpenAI | `text-embedding-3-small` | $0.02/1M | Highest quality |
+| Voyage AI | `voyage-code-3` | Paid | Optimized for code |
+| Cohere | `embed-english-v3.0` | Free trial | General purpose |
+| OpenRouter | Any model | Varies | Multi-model proxy |
 
-No embedding provider? BM25-only mode with stemming and synonyms still outperforms built-in memory.
-
-### Progressive disclosure
-
-Smart search returns compact results first (title, type, score, timestamp) to save tokens. Expand specific IDs to get full observation details.
-
-```bash
-# Compact results (50-100 tokens each)
-curl -X POST http://localhost:3111/agentmemory/smart-search \
-  -d '{"query": "database migration"}'
-
-# Expand specific results (500-1000 tokens each)
-curl -X POST http://localhost:3111/agentmemory/smart-search \
-  -d '{"expandIds": ["obs_abc123", "obs_def456"]}'
-```
-
-## Memory Evolution
-
-Memories in agentmemory are not static. They version, evolve, and form relationships.
-
-### Versioning
-
-When you save a memory that's similar to an existing one (Jaccard > 0.7), the old memory is superseded:
-
-```
-v1: "Use Express for API routes"
-v2: "Use Fastify instead of Express for API routes" (supersedes v1)
-v3: "Use Hono instead of Fastify for Edge API routes" (supersedes v2)
-```
-
-Only the latest version is returned in search results. The full chain is preserved for audit.
-
-### Relationships
-
-Memories can be linked: `supersedes`, `extends`, `derives`, `contradicts`, `related`. Each relationship carries a confidence score (0-1) computed from co-occurrence, recency, and relation type. Traversal follows these links up to N hops, with optional `minConfidence` filtering.
-
-### Auto-forget
-
-agentmemory automatically cleans itself:
-
-| Mechanism | What it does |
-|---|---|
-| **TTL expiry** | Memories with `forgetAfter` date are deleted when expired |
-| **Contradiction detection** | Near-duplicate memories (Jaccard > 0.9), older one is demoted |
-| **Low-value eviction** | Observations older than 90 days with importance < 3 are removed |
-| **Per-project cap** | Projects are capped at 10,000 observations (lowest importance evicted first) |
-
-Run `POST /agentmemory/auto-forget?dryRun=true` to preview what would be cleaned.
-
-### Project profiles
-
-agentmemory aggregates observations into per-project intelligence:
-
-```bash
-curl "http://localhost:3111/agentmemory/profile?project=/my/project"
-```
-
-Returns top concepts, most-touched files, coding conventions, common errors, and a session count. This profile is automatically injected into session context.
-
-### Timeline
-
-Navigate observations chronologically around any anchor point:
-
-```bash
-curl -X POST http://localhost:3111/agentmemory/timeline \
-  -d '{"anchor": "2026-02-15", "before": 5, "after": 5}'
-```
-
-### Export / Import
-
-Full data portability:
-
-```bash
-# Export everything
-curl http://localhost:3111/agentmemory/export > backup.json
-
-# Import with merge strategy
-curl -X POST http://localhost:3111/agentmemory/import \
-  -d '{"exportData": ..., "strategy": "merge"}'
-```
-
-Strategies: `merge` (combine), `replace` (overwrite), `skip` (ignore duplicates).
-
-## Self-Evaluation
-
-agentmemory monitors its own health and validates its own output.
-
-### Quality scoring
-
-Every LLM compression is scored 0-100 based on structured facts, narrative quality, concept extraction, title quality, and importance range. Scores are tracked per-function and exposed via `/health`.
-
-### Self-correction
-
-When LLM output fails Zod validation, agentmemory retries with a stricter prompt explaining the exact errors. This recovers from malformed JSON, missing fields, and out-of-range values.
-
-### Circuit breaker + fallback chain
-
-```
-Primary provider fails
-  -> Circuit breaker opens (3 failures in 60s)
-  -> Falls back to next provider in FALLBACK_PROVIDERS chain
-  -> 30s cooldown -> half-open -> test call -> recovery
-```
-
-Configure with `FALLBACK_PROVIDERS=anthropic,gemini,openrouter`. When all providers are down, observations are stored raw without compression. No data is lost.
-
-### Health monitor
-
-Collects every 30 seconds: heap usage, CPU percentage (delta sampling), event loop lag, connection state. Alerts at warning (80% CPU, 100ms lag) and critical (90% CPU, 500ms lag) thresholds. `GET /agentmemory/health` returns HTTP 503 when critical.
+---
 
 ## MCP Server
 
-### Tools (43)
+43 tools, 6 resources, 3 prompts, and 4 skills — the most comprehensive MCP memory toolkit for any agent.
+
+### 43 Tools
+
+<details>
+<summary>Core tools (always available)</summary>
 
 | Tool | Description |
 |------|-------------|
-| `memory_recall` | Search past observations by keyword |
+| `memory_recall` | Search past observations |
 | `memory_save` | Save an insight, decision, or pattern |
-| `memory_file_history` | Get past observations about specific files |
-| `memory_patterns` | Detect recurring patterns across sessions |
-| `memory_sessions` | List recent sessions with status |
-| `memory_smart_search` | Hybrid semantic + keyword search with progressive disclosure |
-| `memory_timeline` | Chronological observations around an anchor point |
-| `memory_profile` | Project profile with top concepts, files, patterns |
-| `memory_export` | Export all memory data as JSON |
-| `memory_relations` | Query memory relationship graph (with confidence filtering) |
-| `memory_claude_bridge_sync` | Sync memory to/from Claude Code's native MEMORY.md |
-| `memory_graph_query` | Query the knowledge graph for entities and relationships |
-| `memory_consolidate` | Run 4-tier memory consolidation pipeline |
-| `memory_team_share` | Share a memory or observation with team members |
-| `memory_team_feed` | Get recent shared items from all team members |
-| `memory_audit` | View the audit trail of memory operations |
-| `memory_governance_delete` | Delete specific memories with audit trail |
-| `memory_snapshot_create` | Create a git-versioned snapshot of memory state |
-| `memory_action_create` | Create actionable work items with typed dependencies |
-| `memory_action_update` | Update action status, priority, or details |
-| `memory_frontier` | Get unblocked actions ranked by priority and urgency |
-| `memory_next` | Get the single most important next action |
-| `memory_lease` | Acquire, release, or renew exclusive action leases |
-| `memory_routine_run` | Instantiate a frozen workflow routine into action chains |
-| `memory_signal_send` | Send threaded messages between agents |
-| `memory_signal_read` | Read messages for an agent with read receipts |
-| `memory_checkpoint` | Create or resolve external condition gates (CI, approval, deploy) |
-| `memory_mesh_sync` | Sync memories and actions with peer instances |
-| `memory_sentinel_create` | Create event-driven condition watchers |
-| `memory_sentinel_trigger` | Externally fire a sentinel to unblock gated actions |
-| `memory_sketch_create` | Create ephemeral action graphs for exploratory work |
-| `memory_sketch_promote` | Promote sketch actions to permanent actions |
-| `memory_crystallize` | LLM-powered compaction of completed action chains |
-| `memory_diagnose` | Health checks across all subsystems |
-| `memory_heal` | Auto-fix stuck, orphaned, and inconsistent state |
-| `memory_facet_tag` | Attach structured dimension:value tags to targets |
-| `memory_facet_query` | Query targets by facet tags with AND/OR logic |
-| `memory_verify` | Trace a memory's provenance back to source observations and sessions |
+| `memory_smart_search` | Hybrid semantic + keyword search |
+| `memory_file_history` | Past observations about specific files |
+| `memory_sessions` | List recent sessions |
+| `memory_profile` | Project profile (concepts, files, patterns) |
+| `memory_export` | Export all memory data |
 
-### Resources (6)
+</details>
 
-| URI | Description |
-|-----|-------------|
-| `agentmemory://status` | Session count, memory count, health status |
-| `agentmemory://project/{name}/profile` | Per-project intelligence (concepts, files, conventions) |
-| `agentmemory://project/{name}/recent` | Last 5 session summaries for a project |
-| `agentmemory://memories/latest` | Latest 10 active memories (id, title, type, strength) |
-| `agentmemory://graph/stats` | Knowledge graph node and edge counts by type |
-| `agentmemory://team/{id}/profile` | Team memory profile with shared concepts and patterns |
+<details>
+<summary>Extended tools (43 total — set AGENTMEMORY_TOOLS=all)</summary>
 
-### Prompts (3)
+| Tool | Description |
+|------|-------------|
+| `memory_patterns` | Detect recurring patterns |
+| `memory_timeline` | Chronological observations |
+| `memory_relations` | Query relationship graph |
+| `memory_graph_query` | Knowledge graph traversal |
+| `memory_consolidate` | Run 4-tier consolidation |
+| `memory_claude_bridge_sync` | Sync with MEMORY.md |
+| `memory_team_share` | Share with team members |
+| `memory_team_feed` | Recent shared items |
+| `memory_audit` | Audit trail of operations |
+| `memory_governance_delete` | Delete with audit trail |
+| `memory_snapshot_create` | Git-versioned snapshot |
+| `memory_action_create` | Create work items with dependencies |
+| `memory_action_update` | Update action status |
+| `memory_frontier` | Unblocked actions ranked by priority |
+| `memory_next` | Single most important next action |
+| `memory_lease` | Exclusive action leases (multi-agent) |
+| `memory_routine_run` | Instantiate workflow routines |
+| `memory_signal_send` | Inter-agent messaging |
+| `memory_signal_read` | Read messages with receipts |
+| `memory_checkpoint` | External condition gates |
+| `memory_mesh_sync` | P2P sync between instances |
+| `memory_sentinel_create` | Event-driven watchers |
+| `memory_sentinel_trigger` | Fire sentinels externally |
+| `memory_sketch_create` | Ephemeral action graphs |
+| `memory_sketch_promote` | Promote to permanent |
+| `memory_crystallize` | Compact action chains |
+| `memory_diagnose` | Health checks |
+| `memory_heal` | Auto-fix stuck state |
+| `memory_facet_tag` | Dimension:value tags |
+| `memory_facet_query` | Query by facet tags |
+| `memory_verify` | Trace provenance |
 
-| Prompt | Arguments | Description |
-|--------|-----------|-------------|
-| `recall_context` | `task_description` | Searches observations + memories, returns context messages |
-| `session_handoff` | `session_id` | Returns session data + summary for handoff between agents |
-| `detect_patterns` | `project` (optional) | Analyzes recurring patterns across sessions |
+</details>
 
-### Standalone MCP Server
+### 6 Resources · 3 Prompts · 4 Skills
 
-Run agentmemory as a standalone MCP server for any MCP-compatible agent (Cursor, Gemini CLI, OpenCode, Claude Desktop, Cline):
+| Type | Name | Description |
+|------|------|-------------|
+| Resource | `agentmemory://status` | Health, session count, memory count |
+| Resource | `agentmemory://project/{name}/profile` | Per-project intelligence |
+| Resource | `agentmemory://memories/latest` | Latest 10 active memories |
+| Resource | `agentmemory://graph/stats` | Knowledge graph statistics |
+| Prompt | `recall_context` | Search + return context messages |
+| Prompt | `session_handoff` | Handoff data between agents |
+| Prompt | `detect_patterns` | Analyze recurring patterns |
+| Skill | `/recall` | Search memory |
+| Skill | `/remember` | Save to long-term memory |
+| Skill | `/session-history` | Recent session summaries |
+| Skill | `/forget` | Delete observations/sessions |
+
+### Standalone MCP
+
+Run without the full server — for any MCP client:
 
 ```bash
 npx agentmemory-mcp
@@ -583,57 +470,33 @@ Or add to your agent's MCP config:
 }
 ```
 
-The standalone server uses in-memory KV with optional JSON persistence (`STANDALONE_PERSIST_PATH`).
-
-### MCP Endpoints (embedded mode)
-
-```http
-GET  /agentmemory/mcp/tools          — List available tools
-POST /agentmemory/mcp/call           — Execute a tool
-GET  /agentmemory/mcp/resources      — List available resources
-POST /agentmemory/mcp/resources/read — Read a resource by URI
-GET  /agentmemory/mcp/prompts        — List available prompts
-POST /agentmemory/mcp/prompts/get    — Get a prompt with arguments
-```
-
-## Skills
-
-Four slash commands for interacting with memory:
-
-| Skill | Usage |
-|-------|-------|
-| `/recall` | Search memory for past context (`/recall auth middleware`) |
-| `/remember` | Save something to long-term memory (`/remember always use jose for JWT`) |
-| `/session-history` | Show recent session summaries |
-| `/forget` | Delete specific observations or entire sessions |
+---
 
 ## Real-Time Viewer
 
-agentmemory includes a real-time web dashboard that auto-starts on port `3113` (configurable via `III_REST_PORT + 2`).
+Auto-starts on port `3113`. Live observation stream, session explorer, memory browser, knowledge graph visualization, and health dashboard.
 
-- Live observation stream via WebSocket
-- Session explorer with observation details
-- Memory browser with search and filtering
-- Knowledge graph visualization
-- Health and metrics dashboard
+```bash
+open http://localhost:3113
+```
 
-Access at `http://localhost:3113` or via `GET /agentmemory/viewer` on the API port. Protected by `AGENTMEMORY_SECRET` when set. CSP headers applied to all HTML responses.
+Protected by `AGENTMEMORY_SECRET` when set. CSP headers on all HTML responses.
+
+---
 
 ## Configuration
 
 ### LLM Providers
 
-agentmemory needs an LLM for compressing observations and generating summaries. It auto-detects from your environment.
+agentmemory auto-detects from your environment. No API key needed if you have a Claude subscription.
 
 | Provider | Config | Notes |
 |----------|--------|-------|
-| **Claude subscription** (default) | No config needed | Uses `@anthropic-ai/claude-agent-sdk`. Zero cost beyond your Max/Pro plan |
-| **Anthropic API** | `ANTHROPIC_API_KEY` | Direct API access, per-token billing. Supports `ANTHROPIC_BASE_URL` for custom endpoints |
-| **MiniMax** | `MINIMAX_API_KEY` | Anthropic-compatible API. Default model: `MiniMax-M2.7` |
-| **Gemini** | `GEMINI_API_KEY` | Also enables Gemini embeddings (free tier) |
-| **OpenRouter** | `OPENROUTER_API_KEY` | Access any model through one API |
-
-No API key? agentmemory uses your Claude subscription automatically. Zero config.
+| **Claude subscription** (default) | No config needed | Uses `@anthropic-ai/claude-agent-sdk` |
+| Anthropic API | `ANTHROPIC_API_KEY` | Per-token billing |
+| MiniMax | `MINIMAX_API_KEY` | Anthropic-compatible |
+| Gemini | `GEMINI_API_KEY` | Also enables embeddings |
+| OpenRouter | `OPENROUTER_API_KEY` | Any model |
 
 ### Environment Variables
 
@@ -641,261 +504,104 @@ Create `~/.agentmemory/.env`:
 
 ```env
 # LLM provider (pick one, or leave empty for Claude subscription)
-ANTHROPIC_API_KEY=sk-ant-...
-# ANTHROPIC_BASE_URL=https://custom-endpoint.example.com
-# MINIMAX_API_KEY=...
-# MINIMAX_MODEL=MiniMax-M2.7
+# ANTHROPIC_API_KEY=sk-ant-...
 # GEMINI_API_KEY=...
 # OPENROUTER_API_KEY=...
 
-# Embedding provider (auto-detected from LLM keys, or override)
-# EMBEDDING_PROVIDER=voyage
+# Embedding provider (auto-detected, or override)
+# EMBEDDING_PROVIDER=local
 # VOYAGE_API_KEY=...
-# OPENAI_API_KEY=...
-# COHERE_API_KEY=...
 
-# Hybrid search weights (default: 0.4 BM25 + 0.6 vector)
+# Search tuning
 # BM25_WEIGHT=0.4
 # VECTOR_WEIGHT=0.6
-
-# Provider fallback chain (comma-separated, tried in order)
-# FALLBACK_PROVIDERS=anthropic,minimax,gemini,openrouter
-
-# Bearer token for API auth
-# AGENTMEMORY_SECRET=your-secret-here
-
-# Engine connection
-# III_ENGINE_URL=ws://localhost:49134
-# III_REST_PORT=3111
-# III_STREAMS_PORT=3112
-# Viewer runs on III_REST_PORT + 2 (default: 3113)
-
-# Memory tuning
 # TOKEN_BUDGET=2000
-# MAX_OBS_PER_SESSION=500
 
-# Claude Code Memory Bridge (v0.5.0)
-# CLAUDE_MEMORY_BRIDGE=false
-# CLAUDE_MEMORY_LINE_BUDGET=200
+# Auth
+# AGENTMEMORY_SECRET=your-secret
 
-# Standalone MCP Server (v0.5.0)
-# STANDALONE_MCP=false
-# STANDALONE_PERSIST_PATH=~/.agentmemory/standalone.json
+# Ports (defaults: 3111 API, 3113 viewer)
+# III_REST_PORT=3111
 
-# Knowledge Graph (v0.5.0)
+# Features
 # GRAPH_EXTRACTION_ENABLED=false
-# GRAPH_EXTRACTION_BATCH_SIZE=10
-
-# Consolidation Pipeline (v0.5.0)
 # CONSOLIDATION_ENABLED=true
-# CONSOLIDATION_DECAY_DAYS=30
-
-# Lesson Decay (v0.7.0)
 # LESSON_DECAY_ENABLED=true
-
-# Obsidian Export (v0.7.0)
 # OBSIDIAN_AUTO_EXPORT=false
+# CLAUDE_MEMORY_BRIDGE=false
+# SNAPSHOT_ENABLED=false
 
-# MCP Tool Visibility (v0.7.0) — "core" (7 tools) or "all" (43 tools)
-# AGENTMEMORY_TOOLS=core
-
-# Team Memory (v0.5.0)
+# Team
 # TEAM_ID=
 # USER_ID=
 # TEAM_MODE=private
 
-# Git Snapshots (v0.5.0)
-# SNAPSHOT_ENABLED=false
-# SNAPSHOT_INTERVAL=3600
-# SNAPSHOT_DIR=~/.agentmemory/snapshots
+# Tool visibility: "core" (7 tools) or "all" (43 tools)
+# AGENTMEMORY_TOOLS=core
 ```
+
+---
 
 ## API
 
-109 endpoints on port `3111` (103 core + 6 MCP protocol). Protected endpoints require `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set. The table below shows a representative subset; see `src/triggers/api.ts` for the full endpoint list.
+109 endpoints on port `3111`. Protected by `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set.
+
+<details>
+<summary>Key endpoints</summary>
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/agentmemory/health` | Health check with metrics (always public) |
-| `GET` | `/agentmemory/livez` | Liveness probe (always public) |
+| `GET` | `/agentmemory/health` | Health check (always public) |
 | `POST` | `/agentmemory/session/start` | Start session + get context |
-| `POST` | `/agentmemory/session/end` | Mark session complete |
+| `POST` | `/agentmemory/session/end` | End session |
 | `POST` | `/agentmemory/observe` | Capture observation |
+| `POST` | `/agentmemory/smart-search` | Hybrid search |
 | `POST` | `/agentmemory/context` | Generate context |
-| `POST` | `/agentmemory/search` | Search observations (BM25). Optional `project`/`cwd` filters |
-| `POST` | `/agentmemory/smart-search` | Hybrid search with progressive disclosure |
-| `POST` | `/agentmemory/summarize` | Generate session summary |
 | `POST` | `/agentmemory/remember` | Save to long-term memory |
-| `POST` | `/agentmemory/forget` | Delete observations/sessions |
-| `POST` | `/agentmemory/consolidate` | Merge duplicate observations |
-| `POST` | `/agentmemory/patterns` | Detect recurring patterns |
-| `POST` | `/agentmemory/generate-rules` | Generate CLAUDE.md rules from patterns |
-| `POST` | `/agentmemory/file-context` | Get file-specific history |
-| `POST` | `/agentmemory/enrich` | Unified enrichment (file context + memories + bugs) |
-| `POST` | `/agentmemory/evict` | Evict stale memories (`?dryRun=true`) |
-| `POST` | `/agentmemory/migrate` | Import from SQLite |
-| `POST` | `/agentmemory/timeline` | Chronological observations around anchor |
-| `POST` | `/agentmemory/relations` | Create memory relationship (with confidence) |
-| `POST` | `/agentmemory/evolve` | Evolve memory (new version) |
-| `POST` | `/agentmemory/auto-forget` | Run auto-forget (`?dryRun=true`) |
-| `POST` | `/agentmemory/import` | Import data from JSON |
-| `GET` | `/agentmemory/profile` | Project profile (`?project=/path`) |
-| `GET` | `/agentmemory/export` | Export all data as JSON |
-| `GET` | `/agentmemory/sessions` | List all sessions |
-| `GET` | `/agentmemory/observations` | Session observations (`?sessionId=X`) |
-| `GET` | `/agentmemory/viewer` | Real-time web viewer (also at `http://localhost:3113`) |
-| `GET` | `/agentmemory/claude-bridge/read` | Read Claude Code native MEMORY.md |
-| `POST` | `/agentmemory/claude-bridge/sync` | Sync memories to MEMORY.md |
-| `POST` | `/agentmemory/graph/query` | Query knowledge graph (BFS traversal) |
-| `GET` | `/agentmemory/graph/stats` | Knowledge graph node/edge counts |
-| `POST` | `/agentmemory/graph/extract` | Extract entities from observations |
-| `POST` | `/agentmemory/consolidate-pipeline` | Run 4-tier consolidation pipeline |
-| `POST` | `/agentmemory/team/share` | Share memory with team members |
-| `GET` | `/agentmemory/team/feed` | Recent shared items from team |
-| `GET` | `/agentmemory/team/profile` | Aggregated team memory profile |
-| `GET` | `/agentmemory/audit` | Query audit trail (`?operation=X&limit=N`) |
-| `DELETE` | `/agentmemory/governance/memories` | Delete specific memories with audit |
-| `POST` | `/agentmemory/governance/bulk-delete` | Bulk delete by type/date/quality |
-| `GET` | `/agentmemory/snapshots` | List git snapshots |
-| `POST` | `/agentmemory/snapshot/create` | Create git-versioned snapshot |
-| `POST` | `/agentmemory/snapshot/restore` | Restore from snapshot commit |
-| `POST` | `/agentmemory/lessons` | Save a lesson (returns 201 if created, 200 if strengthened) |
-| `GET` | `/agentmemory/lessons` | List lessons (`?project=X&minConfidence=0.5`) |
-| `POST` | `/agentmemory/lessons/search` | Search lessons by query |
-| `POST` | `/agentmemory/lessons/strengthen` | Reinforce a lesson's confidence |
-| `POST` | `/agentmemory/obsidian/export` | Export vault as Obsidian Markdown |
-| `GET` | `/agentmemory/mcp/tools` | List MCP tools |
-| `POST` | `/agentmemory/mcp/call` | Execute MCP tool |
-| `GET` | `/agentmemory/mcp/resources` | List MCP resources |
-| `POST` | `/agentmemory/mcp/resources/read` | Read MCP resource by URI |
-| `GET` | `/agentmemory/mcp/prompts` | List MCP prompts |
-| `POST` | `/agentmemory/mcp/prompts/get` | Get MCP prompt with arguments |
+| `POST` | `/agentmemory/forget` | Delete observations |
+| `POST` | `/agentmemory/enrich` | File context + memories + bugs |
+| `GET` | `/agentmemory/profile` | Project profile |
+| `GET` | `/agentmemory/export` | Export all data |
+| `POST` | `/agentmemory/import` | Import from JSON |
+| `POST` | `/agentmemory/graph/query` | Knowledge graph query |
+| `POST` | `/agentmemory/team/share` | Share with team |
+| `GET` | `/agentmemory/audit` | Audit trail |
 
-## Plugin Install
+Full endpoint list: [`src/triggers/api.ts`](src/triggers/api.ts)
 
-### From Marketplace (recommended)
+</details>
 
-```bash
-/plugin marketplace add rohitg00/agentmemory
-/plugin install agentmemory
-```
-
-Restart Claude Code. All 12 hooks, 4 skills, and 43 MCP tools are registered automatically.
-
-### Plugin Commands
-
-```bash
-/plugin install agentmemory          # Install
-/plugin disable agentmemory          # Disable without uninstalling
-/plugin enable agentmemory           # Re-enable
-/plugin uninstall agentmemory        # Remove
-```
+---
 
 ## Architecture
 
-agentmemory is built on iii-engine's three primitives:
+Built on [iii-engine](https://iii.dev)'s three primitives — no Express, no Postgres, no Redis.
 
-| What you'd normally need | What agentmemory uses |
+**118 source files · ~21,800 LOC · 646 tests · 123 functions · 34 KV scopes**
+
+<details>
+<summary>What iii-engine replaces</summary>
+
+| Traditional stack | agentmemory uses |
 |---|---|
 | Express.js / Fastify | iii HTTP Triggers |
 | SQLite / Postgres + pgvector | iii KV State + in-memory vector index |
 | SSE / Socket.io | iii Streams (WebSocket) |
 | pm2 / systemd | iii-engine worker management |
-| Prometheus / Grafana | iii OTEL + built-in health monitor |
-| Redis (circuit breaker) | In-process circuit breaker + fallback chain |
+| Prometheus / Grafana | iii OTEL + health monitor |
 
-**118 source files. ~21,800 LOC. 646 tests. Zero external DB dependencies.**
-
-### Functions (123 mem:: functions)
-
-| Category | Functions | Purpose |
-|----------|-----------|---------|
-| **Core Memory** | `observe`, `compress`, `search`, `smart-search` | Capture, compress, and search observations |
-| | `context`, `summarize`, `remember`, `forget` | Build context, generate summaries, save/delete memories |
-| | `file-context`, `enrich`, `patterns`, `generate-rules` | File history, enrichment, pattern detection, rule generation |
-| | `migrate`, `export`, `import` | SQLite migration, JSON round-trip (v0.3.0–v0.7.2) |
-| **Search** | `expand-query`, `sliding-window`, `graph-retrieval` | Query reformulations, context enrichment, entity-based retrieval |
-| | `retention-score`, `retention-evict` | Ebbinghaus decay with tiered storage (hot/warm/cold) |
-| **Memory Evolution** | `evolve`, `auto-forget`, `evict` | Version memories, TTL expiry, importance-based eviction |
-| | `consolidate`, `consolidate-pipeline` | Merge duplicates, 4-tier consolidation (working→episodic→semantic→procedural) |
-| | `verify`, `cascade-update` | Citation chain provenance, staleness propagation |
-| **Knowledge Graph** | `graph-extract`, `graph-query`, `graph-stats` | LLM entity extraction, BFS traversal, statistics |
-| | `temporal-graph-extract`, `temporal-query` | Temporal knowledge extraction + point-in-time queries |
-| **Relationships** | `relate`, `get-related`, `timeline`, `profile` | Memory relations, chronological view, project profiles |
-| **Claude Bridge** | `claude-bridge-read`, `claude-bridge-sync` | Bi-directional sync with MEMORY.md |
-| **Actions** | `action-create`, `action-update`, `action-get`, `action-list` | Dependency-aware work items with typed edges |
-| | `action-edge-create` | Create typed edges between actions (requires, unlocks, gated_by) |
-| | `frontier`, `next` | Priority-ranked unblocked action queue |
-| **Leases** | `lease-acquire`, `lease-release`, `lease-renew`, `lease-cleanup` | TTL-based atomic agent claims with auto-cleanup |
-| **Routines** | `routine-create`, `routine-freeze`, `routine-list`, `routine-run`, `routine-status` | Frozen workflow templates instantiated into action chains |
-| **Signals** | `signal-send`, `signal-read`, `signal-threads`, `signal-cleanup` | Threaded inter-agent messaging with read receipts |
-| **Checkpoints** | `checkpoint-create`, `checkpoint-resolve`, `checkpoint-list`, `checkpoint-expire` | External condition gates (CI, approval, deploy) |
-| **Mesh** | `mesh-register`, `mesh-sync`, `mesh-receive`, `mesh-list`, `mesh-remove` | P2P sync between agentmemory instances |
-| **Sentinels** | `sentinel-create`, `sentinel-trigger`, `sentinel-check`, `sentinel-cancel`, `sentinel-list`, `sentinel-expire` | Event-driven condition watchers |
-| **Sketches** | `sketch-create`, `sketch-add`, `sketch-promote`, `sketch-discard`, `sketch-list`, `sketch-gc` | Ephemeral action graphs with auto-expiry |
-| **Crystals** | `crystallize`, `auto-crystallize`, `crystal-list`, `crystal-get` | LLM-powered compaction of action chains into digests |
-| **Lessons** | `lesson-save`, `lesson-recall`, `lesson-list`, `lesson-strengthen`, `lesson-decay-sweep` | Confidence-scored lessons with dedup, reinforcement, and decay |
-| **Facets** | `facet-tag`, `facet-untag`, `facet-query`, `facet-get`, `facet-stats`, `facet-dimensions` | Multi-dimensional tagging with AND/OR queries |
-| **Diagnostics** | `diagnose`, `heal` | Self-diagnosis across 8 categories with auto-fix |
-| **Flow** | `flow-compress` | LLM summarization of completed action chains |
-| **Branch** | `detect-worktree`, `list-worktrees`, `branch-sessions` | Git worktree detection for shared memory |
-| **Team** | `team-share`, `team-feed`, `team-profile` | Namespaced shared + private team memory |
-| **Governance** | `governance-delete`, `governance-bulk`, `audit-query` | Delete with audit trail, bulk operations |
-| **Snapshots** | `snapshot-create`, `snapshot-list`, `snapshot-restore` | Git-versioned memory state |
-| **Export** | `obsidian-export` | Obsidian-compatible Markdown with YAML frontmatter + wikilinks |
-
-### Data Model (34 KV scopes)
-
-| Scope | Stores |
-|-------|--------|
-| `mem:sessions` | Session metadata, project, timestamps |
-| `mem:obs:{session_id}` | Compressed observations with embeddings |
-| `mem:summaries` | End-of-session summaries |
-| `mem:memories` | Long-term memories (versioned, with relationships) |
-| `mem:relations` | Memory relationship graph |
-| `mem:profiles` | Aggregated project profiles |
-| `mem:emb:{obs_id}` | Vector embeddings |
-| `mem:index:bm25` | Persisted BM25 index |
-| `mem:metrics` | Per-function metrics |
-| `mem:health` | Health snapshots |
-| `mem:config` | Runtime configuration overrides |
-| `mem:confidence` | Confidence scores for memories |
-| `mem:claude-bridge` | Claude Code MEMORY.md bridge state |
-| `mem:graph:nodes` | Knowledge graph entities |
-| `mem:graph:edges` | Knowledge graph relationships |
-| `mem:semantic` | Semantic memories (consolidated facts) |
-| `mem:procedural` | Procedural memories (extracted workflows) |
-| `mem:team:{id}:shared` | Team shared items |
-| `mem:team:{id}:users:{uid}` | Per-user team state |
-| `mem:team:{id}:profile` | Aggregated team profile |
-| `mem:audit` | Audit trail for all operations |
-| `mem:actions` | Dependency-aware work items |
-| `mem:action-edges` | Typed edges (requires, unlocks, gated_by, etc.) |
-| `mem:leases` | TTL-based agent work claims |
-| `mem:routines` | Frozen workflow templates |
-| `mem:routine-runs` | Instantiated routine execution tracking |
-| `mem:signals` | Inter-agent messages with threading |
-| `mem:checkpoints` | External condition gates |
-| `mem:mesh` | Registered P2P sync peers |
-| `mem:sentinels` | Event-driven condition watchers |
-| `mem:sketches` | Ephemeral action graphs |
-| `mem:crystals` | Compacted action chain digests |
-| `mem:facets` | Multi-dimensional tags |
-| `mem:lessons` | Confidence-scored lessons with decay |
+</details>
 
 ## Development
 
 ```bash
 npm run dev               # Hot reload
-npm run build             # Production build (~425KB)
-npm test                  # Unit tests (646 tests, ~1.7s)
+npm run build             # Production build
+npm test                  # 646 tests (~1.7s)
 npm run test:integration  # API tests (requires running services)
 ```
 
-### Prerequisites
-
-- Node.js >= 20
-- [iii-engine](https://iii.dev/docs) (`curl -fsSL https://install.iii.dev/iii/main/install.sh | sh`)
+**Prerequisites:** Node.js >= 20, [iii-engine](https://iii.dev/docs) (auto-installed by `npx @agentmemory/agentmemory`)
 
 ## License
 

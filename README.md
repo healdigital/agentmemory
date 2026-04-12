@@ -242,6 +242,10 @@ git clone https://github.com/rohitg00/agentmemory.git && cd agentmemory
 npm install && npm run build && npm start
 ```
 
+This starts agentmemory with a local `iii-engine` if `iii` is already installed, or falls back to Docker Compose if Docker is available. REST, streams, and the viewer bind to `127.0.0.1` by default.
+
+Install `iii-engine` manually with `cargo install iii-engine` or follow [iii.dev docs](https://iii.dev/docs).
+
 ---
 
 ## Why agentmemory
@@ -480,7 +484,7 @@ Auto-starts on port `3113`. Live observation stream, session explorer, memory br
 open http://localhost:3113
 ```
 
-Protected by `AGENTMEMORY_SECRET` when set. CSP headers on all HTML responses.
+The viewer server binds to `127.0.0.1` by default. The REST-served `/agentmemory/viewer` endpoint follows the normal `AGENTMEMORY_SECRET` bearer-token rules. CSP headers use a per-response script nonce and disable inline handler attributes (`script-src-attr 'none'`).
 
 ---
 
@@ -528,6 +532,7 @@ Create `~/.agentmemory/.env`:
 # CONSOLIDATION_ENABLED=true
 # LESSON_DECAY_ENABLED=true
 # OBSIDIAN_AUTO_EXPORT=false
+# AGENTMEMORY_EXPORT_ROOT=~/.agentmemory
 # CLAUDE_MEMORY_BRIDGE=false
 # SNAPSHOT_ENABLED=false
 
@@ -544,7 +549,7 @@ Create `~/.agentmemory/.env`:
 
 ## API
 
-109 endpoints on port `3111`. Protected by `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set.
+109 endpoints on port `3111`. The REST API binds to `127.0.0.1` by default. Protected endpoints require `Authorization: Bearer <secret>` when `AGENTMEMORY_SECRET` is set, and mesh sync endpoints require `AGENTMEMORY_SECRET` on both peers.
 
 <details>
 <summary>Key endpoints</summary>
@@ -601,7 +606,7 @@ npm test                  # 646 tests (~1.7s)
 npm run test:integration  # API tests (requires running services)
 ```
 
-**Prerequisites:** Node.js >= 20, [iii-engine](https://iii.dev/docs) (auto-installed by `npx @agentmemory/agentmemory`)
+**Prerequisites:** Node.js >= 20, [iii-engine](https://iii.dev/docs) or Docker
 
 ## License
 

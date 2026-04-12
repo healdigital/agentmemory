@@ -120,8 +120,10 @@ function makeSession(id: string): Session {
 describe("Obsidian Export", () => {
   let sdk: ReturnType<typeof mockSdk>;
   let kv: ReturnType<typeof mockKV>;
+  const exportRoot = "/tmp/agentmemory-export-root";
 
   beforeEach(() => {
+    process.env.AGENTMEMORY_EXPORT_ROOT = exportRoot;
     sdk = mockSdk();
     kv = mockKV();
     writtenFiles.clear();
@@ -220,13 +222,22 @@ describe("Obsidian Export", () => {
 
   it("respects custom vaultDir", async () => {
     await sdk.trigger("mem::obsidian-export", {
-      vaultDir: "/tmp/test-vault",
+      vaultDir: "/tmp/agentmemory-export-root/test-vault",
     });
 
     const hasCustomPath = [...createdDirs].some((d) =>
-      d.startsWith("/tmp/test-vault"),
+      d.startsWith("/tmp/agentmemory-export-root/test-vault"),
     );
     expect(hasCustomPath).toBe(true);
+  });
+
+  it("rejects vaultDir outside the export root", async () => {
+    const result = (await sdk.trigger("mem::obsidian-export", {
+      vaultDir: "/tmp/outside-root",
+    })) as { success: boolean; error: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain(exportRoot);
   });
 
   it("skips deleted lessons", async () => {

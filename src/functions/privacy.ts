@@ -4,9 +4,11 @@ const PRIVATE_TAG_RE = /<private>[\s\S]*?<\/private>/gi;
 
 const SECRET_PATTERN_SOURCES = [
   /(?:api[_-]?key|secret|token|password|credential|auth)[\s]*[=:]\s*["']?[A-Za-z0-9_\-/.+]{20,}["']?/gi,
-  /(?:sk|pk|rk|ak)-[A-Za-z0-9]{20,}/g,
+  /Bearer\s+[A-Za-z0-9._\-+/=]{20,}/gi,
+  /sk-proj-[A-Za-z0-9\-_]{20,}/g,
+  /(?:sk|pk|rk|ak)-[A-Za-z0-9][A-Za-z0-9\-_]{19,}/g,
   /sk-ant-[A-Za-z0-9\-_]{20,}/g,
-  /ghp_[A-Za-z0-9]{36}/g,
+  /gh[pus]_[A-Za-z0-9]{36,}/g,
   /github_pat_[A-Za-z0-9_]{22,}/g,
   /xoxb-[A-Za-z0-9\-]+/g,
   /AKIA[0-9A-Z]{16}/g,

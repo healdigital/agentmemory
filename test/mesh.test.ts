@@ -180,6 +180,60 @@ describe("Mesh Functions", () => {
     });
   });
 
+  describe("mesh-sync", () => {
+    it("requires a configured shared secret", async () => {
+      const regResult = (await sdk.trigger("mem::mesh-register", {
+        url: "https://peer1.example.com",
+        name: "peer-1",
+      })) as { success: boolean; peer: MeshPeer };
+
+      const result = (await sdk.trigger("mem::mesh-sync", {
+        peerId: regResult.peer.id,
+        direction: "push",
+      })) as { success: boolean; error: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("AGENTMEMORY_SECRET");
+    });
+
+    it("sends authorization headers to peers when syncing", async () => {
+      const authedSdk = mockSdk();
+      const authedKv = mockKV();
+      registerMeshFunction(authedSdk as never, authedKv as never, "mesh-secret");
+
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ accepted: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const regResult = (await authedSdk.trigger("mem::mesh-register", {
+        url: "https://peer2.example.com",
+        name: "peer-2",
+      })) as { success: boolean; peer: MeshPeer };
+
+      const result = (await authedSdk.trigger("mem::mesh-sync", {
+        peerId: regResult.peer.id,
+        direction: "push",
+      })) as { success: boolean; results: Array<{ errors: string[] }> };
+
+      expect(result.success).toBe(true);
+      expect(result.results[0].errors).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://peer2.example.com/agentmemory/mesh/receive",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: "Bearer mesh-secret",
+          }),
+        }),
+      );
+
+      vi.unstubAllGlobals();
+    });
+  });
+
   describe("mesh-receive", () => {
     it("accepts new memories", async () => {
       const mem: Memory = {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawn, execFileSync, execSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,9 +26,9 @@ Options:
   --port <N>         Override REST port (default: 3111)
 
 Quick start:
-  npx @agentmemory/agentmemory          # start everything
+  npx @agentmemory/agentmemory          # start with local iii-engine or Docker
   npx @agentmemory/agentmemory status   # check health
-  npx agentmemory-mcp                   # standalone MCP (no engine)
+  npx agentmemory-mcp                   # standalone MCP server (no engine)
 `);
   process.exit(0);
 }
@@ -81,76 +81,9 @@ function whichBinary(name: string): string | null {
   }
 }
 
-async function installIii(): Promise<boolean> {
-  if (process.platform === "win32") {
-    p.log.warn("Automatic iii-engine install is not supported on Windows.");
-    p.log.info("Install manually: https://iii.dev/docs");
-    return false;
-  }
-
-  const curlBin = whichBinary("curl");
-  if (!curlBin) {
-    p.log.warn("curl not found — cannot auto-install iii-engine.");
-    return false;
-  }
-
-  const shouldInstall = await p.confirm({
-    message: "iii-engine is not installed. Install it now?",
-    initialValue: true,
-  });
-
-  if (p.isCancel(shouldInstall) || !shouldInstall) {
-    return false;
-  }
-
-  const s = p.spinner();
-  s.start("Installing iii-engine...");
-
-  try {
-    execSync("curl -fsSL https://install.iii.dev/iii/main/install.sh | sh", {
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 120000,
-    });
-
-    const installed = whichBinary("iii");
-    if (installed) {
-      s.stop("iii-engine installed successfully");
-      return true;
-    }
-
-    s.stop("Installation completed but iii not found in PATH");
-    p.log.warn("You may need to restart your shell or add iii to your PATH.");
-
-    const iiiPaths = [
-      join(process.env["HOME"] || "", ".local", "bin", "iii"),
-      "/usr/local/bin/iii",
-    ];
-    for (const iiiPath of iiiPaths) {
-      if (existsSync(iiiPath)) {
-        p.log.info(`Found iii at: ${iiiPath}`);
-        process.env["PATH"] = `${dirname(iiiPath)}:${process.env["PATH"]}`;
-        return true;
-      }
-    }
-
-    return false;
-  } catch (err) {
-    s.stop("Failed to install iii-engine");
-    p.log.error(err instanceof Error ? err.message : String(err));
-    return false;
-  }
-}
-
 async function startEngine(): Promise<boolean> {
   const configPath = findIiiConfig();
   let iiiBin = whichBinary("iii");
-
-  if (!iiiBin) {
-    const installed = await installIii();
-    if (installed) {
-      iiiBin = whichBinary("iii");
-    }
-  }
 
   if (iiiBin && configPath) {
     const s = p.spinner();
@@ -178,6 +111,31 @@ async function startEngine(): Promise<boolean> {
     });
     child.unref();
     s.stop("Docker compose started");
+    return true;
+  }
+
+  const iiiPaths = [
+    join(process.env["HOME"] || "", ".local", "bin", "iii"),
+    "/usr/local/bin/iii",
+  ];
+  for (const iiiPath of iiiPaths) {
+    if (existsSync(iiiPath)) {
+      p.log.info(`Found iii at: ${iiiPath}`);
+      process.env["PATH"] = `${dirname(iiiPath)}:${process.env["PATH"]}`;
+      iiiBin = iiiPath;
+      break;
+    }
+  }
+
+  if (iiiBin && configPath) {
+    const s = p.spinner();
+    s.start(`Starting iii-engine: ${iiiBin}`);
+    const child = spawn(iiiBin, ["--config", configPath], {
+      detached: true,
+      stdio: "ignore",
+    });
+    child.unref();
+    s.stop("iii-engine process started");
     return true;
   }
 
@@ -214,8 +172,8 @@ async function main() {
     p.note(
       [
         "Install iii-engine (pick one):",
-        "  curl -fsSL https://install.iii.dev/iii/main/install.sh | sh",
         "  cargo install iii-engine",
+        "  See: https://iii.dev/docs",
         "",
         "Or use Docker:",
         "  docker pull iiidev/iii:latest",

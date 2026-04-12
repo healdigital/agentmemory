@@ -4,10 +4,7 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { timingSafeCompare, VIEWER_CSP } from "../auth.js";
+import { renderViewerDocument } from "./document.js";
 
 const ALLOWED_ORIGINS = (
   process.env.VIEWER_ALLOWED_ORIGINS ||
@@ -61,14 +58,6 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function checkAuth(req: IncomingMessage, secret: string | undefined): boolean {
-  if (!secret) return true;
-  const auth = req.headers["authorization"] || "";
-  return (
-    typeof auth === "string" && timingSafeCompare(auth, `Bearer ${secret}`)
-  );
-}
-
 export function startViewerServer(
   port: number,
   _kv: unknown,
@@ -100,33 +89,18 @@ export function startViewerServer(
         pathname === "/viewer" ||
         pathname === "/agentmemory/viewer")
     ) {
-      const base = dirname(fileURLToPath(import.meta.url));
-      const candidates = [
-        join(base, "index.html"),
-        join(base, "viewer", "index.html"),
-        join(base, "..", "viewer", "index.html"),
-        join(base, "..", "src", "viewer", "index.html"),
-        join(base, "..", "dist", "viewer", "index.html"),
-      ];
-      for (const p of candidates) {
-        try {
-          const html = readFileSync(p, "utf-8");
-          res.writeHead(200, {
-            "Content-Type": "text/html; charset=utf-8",
-            "Content-Security-Policy": VIEWER_CSP,
-            "Cache-Control": "no-cache",
-          });
-          res.end(html);
-          return;
-        } catch {}
+      const rendered = renderViewerDocument();
+      if (rendered.found) {
+        res.writeHead(200, {
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Security-Policy": rendered.csp,
+          "Cache-Control": "no-cache",
+        });
+        res.end(rendered.html);
+        return;
       }
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("viewer not found");
-      return;
-    }
-
-    if (!checkAuth(req, secret)) {
-      json(res, 401, { error: "unauthorized" }, req);
       return;
     }
 

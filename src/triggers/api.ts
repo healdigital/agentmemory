@@ -2,14 +2,12 @@ import type { ISdk, ApiRequest } from "iii-sdk";
 import type { Session, CompressedObservation, HookPayload } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { getLatestHealth } from "../health/monitor.js";
 import type { MetricsStore } from "../eval/metrics-store.js";
 import type { ResilientProvider } from "../providers/resilient.js";
 import { VERSION } from "../version.js";
-import { timingSafeCompare, VIEWER_CSP } from "../auth.js";
+import { timingSafeCompare } from "../auth.js";
+import { renderViewerDocument } from "../viewer/document.js";
 
 type Response = {
   status_code: number;
@@ -30,6 +28,17 @@ function checkAuth(
     return { status_code: 401, body: { error: "unauthorized" } };
   }
   return null;
+}
+
+function requireConfiguredSecret(
+  secret: string | undefined,
+  feature: string,
+): Response | null {
+  if (secret) return null;
+  return {
+    status_code: 503,
+    body: { error: `${feature} requires AGENTMEMORY_SECRET` },
+  };
 }
 
 export function registerApiTriggers(
@@ -1426,6 +1435,8 @@ export function registerApiTriggers(
     async (
       req: ApiRequest<{ url: string; name: string; sharedScopes?: string[] }>,
     ): Promise<Response> => {
+      const secretErr = requireConfiguredSecret(secret, "mesh");
+      if (secretErr) return secretErr;
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
       if (!req.body?.url || !req.body?.name) {
@@ -1444,6 +1455,8 @@ export function registerApiTriggers(
   sdk.registerFunction(
     { id: "api::mesh-list" },
     async (req: ApiRequest): Promise<Response> => {
+      const secretErr = requireConfiguredSecret(secret, "mesh");
+      if (secretErr) return secretErr;
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
       const result = await sdk.trigger("mem::mesh-list", {});
@@ -1461,6 +1474,8 @@ export function registerApiTriggers(
     async (
       req: ApiRequest<{ peerId?: string; direction?: string }>,
     ): Promise<Response> => {
+      const secretErr = requireConfiguredSecret(secret, "mesh");
+      if (secretErr) return secretErr;
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
       const result = await sdk.trigger("mem::mesh-sync", req.body || {});
@@ -1476,6 +1491,8 @@ export function registerApiTriggers(
   sdk.registerFunction(
     { id: "api::mesh-receive" },
     async (req: ApiRequest): Promise<Response> => {
+      const secretErr = requireConfiguredSecret(secret, "mesh");
+      if (secretErr) return secretErr;
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
       const result = await sdk.trigger("mem::mesh-receive", req.body || {});
@@ -1491,6 +1508,8 @@ export function registerApiTriggers(
   sdk.registerFunction(
     { id: "api::mesh-export" },
     async (req: ApiRequest): Promise<Response> => {
+      const secretErr = requireConfiguredSecret(secret, "mesh");
+      if (secretErr) return secretErr;
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
       const since = req.query_params?.["since"] as string;
@@ -1612,29 +1631,31 @@ export function registerApiTriggers(
     config: { api_path: "/agentmemory/branch/sessions", http_method: "GET" },
   });
 
-  sdk.registerFunction({ id: "api::viewer" }, async (): Promise<Response> => {
-    const headers = {
-      "Content-Type": "text/html",
-      "Content-Security-Policy": VIEWER_CSP,
-    };
-    const base = dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      join(base, "..", "viewer", "index.html"),
-      join(base, "..", "src", "viewer", "index.html"),
-      join(base, "viewer", "index.html"),
-    ];
-    for (const p of candidates) {
-      try {
-        const html = readFileSync(p, "utf-8");
-        return { status_code: 200, headers, body: html };
-      } catch {}
-    }
-    return {
-      status_code: 404,
-      headers,
-      body: "<!DOCTYPE html><html><body><h1>agentmemory</h1><p>viewer not found</p></body></html>",
-    };
-  });
+  sdk.registerFunction(
+    { id: "api::viewer" },
+    async (req: ApiRequest): Promise<Response> => {
+      const denied = checkAuth(req, secret);
+      if (denied) return denied;
+      const rendered = renderViewerDocument();
+      if (rendered.found) {
+        return {
+          status_code: 200,
+          headers: {
+            "Content-Type": "text/html",
+            "Content-Security-Policy": rendered.csp,
+          },
+          body: rendered.html,
+        };
+      }
+      return {
+        status_code: 404,
+        headers: {
+          "Content-Type": "text/html",
+        },
+        body: "<!DOCTYPE html><html><body><h1>agentmemory</h1><p>viewer not found</p></body></html>",
+      };
+    },
+  );
   sdk.registerTrigger({
     type: "http",
     function_id: "api::viewer",

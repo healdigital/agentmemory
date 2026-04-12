@@ -135,7 +135,11 @@ async function lwwMergeGraphNodes(
   return count;
 }
 
-export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
+export function registerMeshFunction(
+  sdk: ISdk,
+  kv: StateKV,
+  meshAuthToken?: string,
+): void {
   sdk.registerFunction(
     { id: "mem::mesh-register" },
     async (data: {
@@ -183,6 +187,13 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
   sdk.registerFunction(
     { id: "mem::mesh-sync" },
     async (data: { peerId?: string; scopes?: string[]; direction?: "push" | "pull" | "both" }) => {
+      if (!meshAuthToken) {
+        return {
+          success: false,
+          error: "mesh sync requires AGENTMEMORY_SECRET",
+        };
+      }
+
       const direction = data.direction || "both";
       let peers: MeshPeer[];
 
@@ -230,7 +241,10 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             try {
               const response = await fetch(`${peer.url}/agentmemory/mesh/receive`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${meshAuthToken}`,
+                },
                 body: JSON.stringify(pushData),
                 signal: AbortSignal.timeout(30000),
                 redirect: "error",
@@ -250,7 +264,13 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             try {
               const response = await fetch(
                 `${peer.url}/agentmemory/mesh/export?since=${peer.lastSyncAt || ""}`,
-                { signal: AbortSignal.timeout(30000), redirect: "error" },
+                {
+                  headers: {
+                    Authorization: `Bearer ${meshAuthToken}`,
+                  },
+                  signal: AbortSignal.timeout(30000),
+                  redirect: "error",
+                },
               );
               if (response.ok) {
                 const pullData = (await response.json()) as {

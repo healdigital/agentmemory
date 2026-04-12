@@ -765,7 +765,7 @@
     </div>
     <div class="header-right">
       <span class="dateline" id="dateline"></span>
-      <button id="theme-toggle" class="btn" style="font-size:9px;padding:3px 10px;letter-spacing:0.1em;margin-right:8px;" onclick="toggleTheme()">DARK</button>
+      <button id="theme-toggle" class="btn" style="font-size:9px;padding:3px 10px;letter-spacing:0.1em;margin-right:8px;" data-action="toggle-theme">DARK</button>
       <span id="ws-status" class="ws-status disconnected">live updates off</span>
     </div>
   </div>
@@ -800,7 +800,7 @@
     <div class="modal" id="modal"></div>
   </div>
 
-  <script>
+  <script nonce="__AGENTMEMORY_VIEWER_NONCE__">
     var params = new URLSearchParams(window.location.search);
     var viewerPort = params.get('port') || window.location.port || '3113';
     var iiiPort = parseInt(viewerPort);
@@ -1216,7 +1216,7 @@
         html += '</div>';
       }
 
-      html += '<div style="text-align:center;margin-top:20px;"><button class="btn btn-primary" onclick="refreshDashboard()">Refresh</button>';
+      html += '<div style="text-align:center;margin-top:20px;"><button class="btn btn-primary" data-action="refresh-dashboard">Refresh</button>';
       html += '<span style="font-size:10px;color:var(--ink-faint);margin-left:10px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:0.08em;">Auto-refresh 30s</span></div>';
 
       el.innerHTML = html;
@@ -1238,7 +1238,7 @@
 
     async function loadGraph() {
       var el = document.getElementById('view-graph');
-      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" onclick="zoomGraph(1)">+</button><button title="Zoom Out" onclick="zoomGraph(-1)">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" onclick="recenterGraph()">⌖</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
+      el.innerHTML = '<div class="graph-container"><div class="graph-canvas-wrap"><canvas id="graph-canvas"></canvas><div class="graph-controls"><button title="Zoom In" data-action="zoom-graph" data-dir="1">+</button><button title="Zoom Out" data-action="zoom-graph" data-dir="-1">&minus;</button><div class="ctrl-divider"></div><button title="Recenter" data-action="recenter-graph">⌖</button></div><div class="graph-tooltip" id="graph-tooltip"></div></div><div class="graph-sidebar" id="graph-sidebar"></div></div>';
 
       var results = await Promise.all([
         apiPost('graph/query', {}),
@@ -1315,7 +1315,7 @@
       });
       html += '</div>';
 
-      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" onclick="rebuildGraph()" onmouseover="this.style.background=\'var(--ink)\';this.style.color=\'var(--bg)\'" onmouseout="this.style.background=\'\';this.style.color=\'\'">↻ Rebuild Graph</button>';
+      html += '<button class="btn" style="margin-top:14px;width:100%;font-size:11px;padding:8px;letter-spacing:0.06em;transition:all 0.15s ease;" data-action="rebuild-graph">↻ Rebuild Graph</button>';
       html += '<div id="selected-node-panel"></div>';
       sb.innerHTML = html;
 
@@ -1510,7 +1510,7 @@
       }
       var conns = graphSim.edges.filter(function(e) { return e.sourceNodeId === simNode.id || e.targetNodeId === simNode.id; }).length;
       html += '<div class="prop">Connections: ' + conns + '</div>';
-      html += '<button class="btn btn-primary" style="margin-top:8px;width:100%;" onclick="expandNode(\'' + esc(simNode.id) + '\')">Expand neighbors</button>';
+      html += '<button class="btn btn-primary" style="margin-top:8px;width:100%;" data-action="expand-node" data-node-id="' + esc(simNode.id) + '">Expand neighbors</button>';
       html += '</div>';
       panel.innerHTML = html;
     }
@@ -1929,7 +1929,7 @@
           html += '<td><div class="strength-bar"><div class="fill" style="width:' + strength + '%;background:' + barColor + '"></div></div> <span style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);">' + strength + '%</span></td>';
           html += '<td style="color:var(--ink-muted);font-family:var(--font-mono);font-size:12px;">v' + (m.version || 1) + '</td>';
           html += '<td style="font-size:11px;color:var(--ink-faint);font-family:var(--font-mono);">' + esc(formatTime(m.updatedAt)) + '</td>';
-          html += '<td><button class="btn btn-danger" style="font-size:9px;padding:2px 8px;" onclick="deleteMemory(\'' + esc(m.id) + '\',\'' + esc((m.title || '').replace(/'/g, '')) + '\')">Delete</button></td>';
+          html += '<td><button class="btn btn-danger" style="font-size:9px;padding:2px 8px;" data-action="delete-memory" data-memory-id="' + esc(m.id) + '" data-memory-title="' + esc(m.title || '') + '">Delete</button></td>';
           html += '</tr>';
         });
         html += '</table>';
@@ -1956,7 +1956,7 @@
     function deleteMemory(id, title) {
       var modal = document.getElementById('modal');
       var overlay = document.getElementById('modal-overlay');
-      modal.innerHTML = '<h3>Delete Memory</h3><p>Are you sure you want to delete "' + esc(title) + '"? This action cannot be undone.</p><div class="modal-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-danger" onclick="confirmDeleteMemory(\'' + esc(id) + '\')">Delete</button></div>';
+      modal.innerHTML = '<h3>Delete Memory</h3><p>Are you sure you want to delete "' + esc(title) + '"? This action cannot be undone.</p><div class="modal-actions"><button class="btn" data-action="close-modal">Cancel</button><button class="btn btn-danger" data-action="confirm-delete-memory" data-memory-id="' + esc(id) + '">Delete</button></div>';
       overlay.classList.add('open');
     }
 
@@ -2060,10 +2060,10 @@
       var totalPages = Math.ceil(filtered.length / pageSize);
 
       var html = '<div class="type-chips">';
-      html += '<span class="type-chip' + (!tlTypeFilter ? ' active' : '') + '" onclick="setTlTypeFilter(\'\')">All (' + obs.length + ')</span>';
+      html += '<span class="type-chip' + (!tlTypeFilter ? ' active' : '') + '" data-action="timeline-filter" data-type-filter="">All (' + obs.length + ')</span>';
       typeList.forEach(function(t) {
         var color = OBS_TYPE_COLORS[t] || '#666666';
-        html += '<span class="type-chip' + (tlTypeFilter === t ? ' active' : '') + '" onclick="setTlTypeFilter(\'' + esc(t) + '\')" style="' + (tlTypeFilter === t ? 'background:' + color + ';border-color:' + color + ';' : 'border-color:' + color + ';color:' + color + ';') + '">' + esc(t.replace(/_/g, ' ')) + ' (' + typeCounts[t] + ')</span>';
+        html += '<span class="type-chip' + (tlTypeFilter === t ? ' active' : '') + '" data-action="timeline-filter" data-type-filter="' + esc(t) + '" style="' + (tlTypeFilter === t ? 'background:' + color + ';border-color:' + color + ';' : 'border-color:' + color + ';color:' + color + ';') + '">' + esc(t.replace(/_/g, ' ')) + ' (' + typeCounts[t] + ')</span>';
       });
       html += '</div>';
 
@@ -2175,9 +2175,9 @@
 
       if (totalPages > 1) {
         html += '<div class="pagination">';
-        if (page > 0) html += '<button class="btn" onclick="tlPage(' + (page - 1) + ')">Prev</button>';
+        if (page > 0) html += '<button class="btn" data-action="timeline-page" data-page="' + (page - 1) + '">Prev</button>';
         html += '<span style="color:var(--ink-faint);font-size:12px;padding:6px;font-family:var(--font-mono);">Page ' + (page + 1) + ' of ' + totalPages + ' (' + filtered.length + ' total)</span>';
-        if (page < totalPages - 1) html += '<button class="btn" onclick="tlPage(' + (page + 1) + ')">Next</button>';
+        if (page < totalPages - 1) html += '<button class="btn" data-action="timeline-page" data-page="' + (page + 1) + '">Next</button>';
         html += '</div>';
       }
 
@@ -2354,7 +2354,7 @@
         items.forEach(function(s) {
           var statusBadge = s.status === 'active' ? 'badge-green' : s.status === 'completed' ? 'badge-blue' : 'badge-muted';
           var selected = state.sessions.selectedId === s.id;
-          html += '<div class="session-item' + (selected ? ' selected' : '') + '" onclick="selectSession(\'' + esc(s.id) + '\')">';
+          html += '<div class="session-item' + (selected ? ' selected' : '') + '" data-action="select-session" data-session-id="' + esc(s.id) + '">';
           html += '<div class="session-top"><span class="session-project">' + esc(s.project ? s.project.split('/').pop() : 'Unknown') + '</span>';
           html += '<span class="badge ' + statusBadge + '">' + esc(s.status) + '</span></div>';
           html += '<div class="session-meta">' + esc(s.id.slice(0, 12)) + ' &middot; ' + esc(formatTime(s.startedAt));
@@ -2394,9 +2394,9 @@
 
       html += '<div style="margin-top:16px;display:flex;gap:8px;">';
       if (s.status === 'active') {
-        html += '<button class="btn btn-danger" onclick="endSession(\'' + esc(s.id) + '\')">End Session</button>';
+        html += '<button class="btn btn-danger" data-action="end-session" data-session-id="' + esc(s.id) + '">End Session</button>';
       }
-      html += '<button class="btn btn-primary" onclick="summarizeSession(\'' + esc(s.id) + '\')">Summarize</button>';
+      html += '<button class="btn btn-primary" data-action="summarize-session" data-session-id="' + esc(s.id) + '">Summarize</button>';
       html += '</div></div>';
       panel.innerHTML = html;
     }
@@ -2407,8 +2407,8 @@
       loadSessions();
     }
 
-    async function summarizeSession(id) {
-      var btn = event.target;
+    async function summarizeSession(id, btn) {
+      if (!btn) return;
       btn.textContent = 'Summarizing...';
       btn.disabled = true;
       await apiPost('summarize', { sessionId: id });
@@ -2639,7 +2639,7 @@
           html += '<span class="badge ' + badgeClass + '">' + esc(a.operation) + '</span>';
           html += '<span style="font-size:12px;color:var(--ink-muted);font-family:var(--font-mono);">' + esc(a.functionId || '') + '</span>';
           html += '<span style="font-size:10px;color:var(--ink-faint);margin-left:auto;font-family:var(--font-mono);">' + esc(formatTime(a.timestamp)) + '</span>';
-          html += '<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:8px;" onclick="toggleAuditDetail(' + idx + ')">&#9660;</button>';
+          html += '<button class="btn" style="font-size:9px;padding:1px 6px;margin-left:8px;" data-action="toggle-audit" data-audit-index="' + idx + '">&#9660;</button>';
           html += '</div>';
           if (a.targetIds && a.targetIds.length) {
             html += '<div style="font-size:10px;color:var(--ink-faint);font-family:var(--font-mono);">' + a.targetIds.length + ' target(s): ' + esc(a.targetIds.slice(0, 3).join(', ')) + (a.targetIds.length > 3 ? '...' : '') + '</div>';
@@ -2874,6 +2874,83 @@
     document.getElementById('tab-bar').addEventListener('click', function(e) {
       if (e.target.tagName === 'BUTTON' && e.target.dataset.tab) {
         switchTab(e.target.dataset.tab);
+      }
+    });
+    document.addEventListener('click', function(e) {
+      if (!(e.target instanceof Element)) return;
+      var target = e.target.closest('[data-action]');
+      if (!target) return;
+      var action = target.getAttribute('data-action');
+      if (!action) return;
+
+      if (action === 'toggle-theme') {
+        toggleTheme();
+        return;
+      }
+      if (action === 'refresh-dashboard') {
+        refreshDashboard();
+        return;
+      }
+      if (action === 'zoom-graph') {
+        zoomGraph(parseInt(target.getAttribute('data-dir') || '0', 10));
+        return;
+      }
+      if (action === 'recenter-graph') {
+        recenterGraph();
+        return;
+      }
+      if (action === 'rebuild-graph') {
+        rebuildGraph();
+        return;
+      }
+      if (action === 'expand-node') {
+        var nodeId = target.getAttribute('data-node-id');
+        if (nodeId) expandNode(nodeId);
+        return;
+      }
+      if (action === 'delete-memory') {
+        deleteMemory(
+          target.getAttribute('data-memory-id') || '',
+          target.getAttribute('data-memory-title') || '',
+        );
+        return;
+      }
+      if (action === 'close-modal') {
+        closeModal();
+        return;
+      }
+      if (action === 'confirm-delete-memory') {
+        var memoryId = target.getAttribute('data-memory-id');
+        if (memoryId) confirmDeleteMemory(memoryId);
+        return;
+      }
+      if (action === 'timeline-filter') {
+        setTlTypeFilter(target.getAttribute('data-type-filter') || '');
+        return;
+      }
+      if (action === 'timeline-page') {
+        var page = parseInt(target.getAttribute('data-page') || '', 10);
+        if (!Number.isNaN(page)) tlPage(page);
+        return;
+      }
+      if (action === 'select-session') {
+        var sessionId = target.getAttribute('data-session-id');
+        if (sessionId) selectSession(sessionId);
+        return;
+      }
+      if (action === 'end-session') {
+        var endSessionId = target.getAttribute('data-session-id');
+        if (endSessionId) endSession(endSessionId);
+        return;
+      }
+      if (action === 'summarize-session') {
+        var summarizeSessionId = target.getAttribute('data-session-id');
+        if (summarizeSessionId) summarizeSession(summarizeSessionId, target);
+        return;
+      }
+      if (action === 'toggle-audit') {
+        var auditIndex = parseInt(target.getAttribute('data-audit-index') || '', 10);
+        if (!Number.isNaN(auditIndex)) toggleAuditDetail(auditIndex);
       }
     });
     document.getElementById('modal-overlay').addEventListener('click', function(e) {

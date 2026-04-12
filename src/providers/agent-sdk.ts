@@ -26,7 +26,7 @@ export class AgentSDKProvider implements MemoryProvider {
     let result = ''
     for await (const msg of messages) {
       if (msg.type === 'result') {
-        result = (msg as any).result
+        result = (msg as any).result ?? ''
       }
     }
     return result

@@ -39,8 +39,8 @@ export interface CompressedObservation {
   importance: number;
   confidence?: number;
   imageRef?: string;
+  imageData?: string;
   imageDescription?: string;
-  imageThumbBase64?: string;
   modality?: "text" | "image" | "mixed";
 
 }
@@ -59,6 +59,7 @@ export type ObservationType =
   | "subagent"
   | "notification"
   | "task"
+  | "image"
   | "other";
 
 export interface Memory {
@@ -79,6 +80,8 @@ export interface Memory {
   sourceObservationIds?: string[];
   isLatest: boolean;
   forgetAfter?: string;
+  imageRef?: string;
+  imageData?: string;
 }
 
 export interface SessionSummary {

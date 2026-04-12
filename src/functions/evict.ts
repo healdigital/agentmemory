@@ -43,6 +43,7 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
     async (data: { dryRun?: boolean }): Promise<EvictionStats> => {
       const ctx = getContext();
       const dryRun = data?.dryRun ?? false;
+      const { deleteImage } = await import("../utils/image-store.js");
 
       const configOverride = await kv
         .get<Partial<EvictionConfig>>(KV.config, "eviction")
@@ -94,9 +95,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
           ) {
             stats.lowImportanceObs++;
             if (!dryRun) {
-              const { deleteImage } = await import("../utils/image-store.js");
-              if ((o as any).imageData) deleteImage((o as any).imageData);
-              if ((o as any).imageRef) deleteImage((o as any).imageRef);
+              if (o.imageData) deleteImage(o.imageData);
+              if (o.imageRef) deleteImage(o.imageRef);
               await kv
                 .delete(KV.observations(session.id), o.id)
                 .catch(() => {});
@@ -122,9 +122,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
           stats.capEvictions += toEvict.length;
           if (!dryRun) {
             for (const o of toEvict) {
-              const { deleteImage } = await import("../utils/image-store.js");
-              if ((o as any).imageData) deleteImage((o as any).imageData);
-              if ((o as any).imageRef) deleteImage((o as any).imageRef);
+              if (o.imageData) deleteImage(o.imageData);
+              if (o.imageRef) deleteImage(o.imageRef);
               await kv
                 .delete(KV.observations(o.sessionId), o.id)
                 .catch(() => {});
@@ -142,9 +141,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
             stats.expiredMemories++;
             evictedMemIds.add(mem.id);
             if (!dryRun) {
-              if ((mem as any).imageRef) {
-                const { deleteImage } = await import("../utils/image-store.js");
-                deleteImage((mem as any).imageRef);
+              if (mem.imageRef) {
+                deleteImage(mem.imageRef);
               }
               await kv.delete(KV.memories, mem.id).catch(() => {});
             }
@@ -160,9 +158,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
           if (age > cfg.lowImportanceMaxDays * MS_PER_DAY) {
             stats.nonLatestMemories++;
             if (!dryRun) {
-              if ((mem as any).imageRef) {
-                const { deleteImage } = await import("../utils/image-store.js");
-                deleteImage((mem as any).imageRef);
+              if (mem.imageRef) {
+                deleteImage(mem.imageRef);
               }
               await kv.delete(KV.memories, mem.id).catch(() => {});
             }

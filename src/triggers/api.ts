@@ -1208,26 +1208,31 @@ export function registerApiTriggers(
 
   sdk.registerFunction(
     { id: "api::routine-create" },
-    async (req: ApiRequest): Promise<Response> => {
+    async (
+      req: ApiRequest<{
+        name: string;
+        description?: string;
+        steps: unknown[];
+        tags?: string[];
+        frozen?: boolean;
+        sourceProceduralIds?: string[];
+      }>,
+    ): Promise<Response> => {
       const authErr = checkAuth(req, secret);
       if (authErr) return authErr;
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      const name = typeof body.name === "string" ? body.name.trim() : "";
-      const steps = body.steps;
-      if (!name || !Array.isArray(steps) || steps.length === 0) {
-        return { status_code: 400, body: { error: "name and steps are required" } };
+      if (!req.body?.name || !req.body?.steps) {
+        return {
+          status_code: 400,
+          body: { error: "name and steps are required" },
+        };
       }
       const payload = {
-        name,
-        description: typeof body.description === "string" ? body.description : undefined,
-        steps,
-        tags: Array.isArray(body.tags)
-          ? body.tags.filter((t): t is string => typeof t === "string")
-          : undefined,
-        frozen: typeof body.frozen === "boolean" ? body.frozen : undefined,
-        sourceProceduralIds: Array.isArray(body.sourceProceduralIds)
-          ? body.sourceProceduralIds.filter((id): id is string => typeof id === "string")
-          : undefined,
+        name: req.body.name,
+        description: req.body.description,
+        steps: req.body.steps,
+        tags: req.body.tags,
+        frozen: req.body.frozen,
+        sourceProceduralIds: req.body.sourceProceduralIds,
       };
       const result = await sdk.trigger("mem::routine-create", payload);
       return { status_code: 201, body: result };

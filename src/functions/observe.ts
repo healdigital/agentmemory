@@ -21,7 +21,7 @@ export function extractImage(d: unknown): string | undefined {
     if (typeof obj["image_path"] === "string") return obj["image_path"];
     if (typeof obj["imageBase64"] === "string") return obj["imageBase64"];
     if (typeof obj["imagePath"] === "string") return obj["imagePath"];
-    
+
     for (const key of Object.keys(obj)) {
       const match = extractImage(obj[key]);
       if (match) return match;
@@ -95,6 +95,8 @@ export function registerObserveFunction(
         raw: sanitizedRaw,
       };
 
+      let extractedImage: string | undefined;
+
       if (typeof sanitizedRaw === "object" && sanitizedRaw !== null) {
         const d = sanitizedRaw as Record<string, unknown>;
         if (
@@ -109,15 +111,18 @@ export function registerObserveFunction(
           raw.userPrompt = d["prompt"] as string | undefined;
         }
 
-        const hiddenImage = extractImage(sanitizedRaw);
-        if (hiddenImage) {
+        extractedImage = extractImage(sanitizedRaw);
+        if (extractedImage) {
           raw.modality = (raw.toolInput || raw.toolOutput || raw.userPrompt) ? "mixed" : "image";
+        }
+      } else if (typeof sanitizedRaw === "string") {
+        extractedImage = extractImage(sanitizedRaw);
+        if (extractedImage) {
+          raw.modality = "image";
         }
       }
 
-      const pendingImageData = (raw.modality === "image" || raw.modality === "mixed")
-        ? extractImage(typeof sanitizedRaw === "object" ? sanitizedRaw : undefined)
-        : undefined;
+      const pendingImageData = extractedImage;
 
       return withKeyedLock(`obs:${payload.sessionId}`, async () => {
         if (maxObservationsPerSession && maxObservationsPerSession > 0) {
@@ -135,7 +140,17 @@ export function registerObserveFunction(
           raw.imageData = saveImageToDisk(pendingImageData);
         }
 
-        await kv.set(KV.observations(payload.sessionId), obsId, raw);
+        try {
+
+          await kv.set(KV.observations(payload.sessionId), obsId, raw);
+
+        } catch (error) {
+          if (raw.imageData) {
+            const { deleteImage } = await import("../utils/image-store.js");
+            deleteImage(raw.imageData);
+          }
+          throw error;
+        }
 
         if (dedupMap && dedupHash) {
           dedupMap.record(dedupHash);

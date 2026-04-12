@@ -29,6 +29,7 @@ export function registerAutoForgetFunction(sdk: ISdk, kv: StateKV): void {
       const ctx = getContext();
       const dryRun = data?.dryRun ?? false;
       const now = Date.now();
+      const { deleteImage } = await import("../utils/image-store.js");
 
       const result: AutoForgetResult = {
         ttlExpired: [],
@@ -46,9 +47,8 @@ export function registerAutoForgetFunction(sdk: ISdk, kv: StateKV): void {
             result.ttlExpired.push(mem.id);
             deletedIds.add(mem.id);
             if (!dryRun) {
-              if ((mem as any).imageRef) {
-                const { deleteImage } = await import("../utils/image-store.js");
-                deleteImage((mem as any).imageRef);
+              if (mem.imageRef) {
+                deleteImage(mem.imageRef);
               }
               await kv.delete(KV.memories, mem.id);
             }
@@ -153,9 +153,8 @@ export function registerAutoForgetFunction(sdk: ISdk, kv: StateKV): void {
           if (age > 180 * MS_PER_DAY && (obs.importance ?? 5) <= 2) {
             result.lowValueObs.push(obs.id);
             if (!dryRun) {
-              const { deleteImage } = await import("../utils/image-store.js");
-              if ((obs as any).imageData) deleteImage((obs as any).imageData);
-              if ((obs as any).imageRef) deleteImage((obs as any).imageRef);
+              if (obs.imageData) deleteImage(obs.imageData);
+              if (obs.imageRef) deleteImage(obs.imageRef);
               await kv
                 .delete(KV.observations(sessions[i].id), obs.id)
                 .catch(() => { });

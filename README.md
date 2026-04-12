@@ -15,12 +15,12 @@
 </p>
 
 <p align="center">
-  <img src="assets/tags/stat-recall.svg" alt="95.2% retrieval R@5" height="48" />
-  <img src="assets/tags/stat-tokens.svg" alt="92% fewer tokens" height="48" />
-  <img src="assets/tags/stat-tools.svg" alt="43 MCP tools" height="48" />
-  <img src="assets/tags/stat-hooks.svg" alt="12 auto hooks" height="48" />
-  <img src="assets/tags/stat-deps.svg" alt="0 external DBs" height="48" />
-  <img src="assets/tags/stat-tests.svg" alt="654 tests passing" height="48" />
+  <img src="assets/tags/stat-recall.svg" alt="95.2% retrieval R@5" height="38" />
+  <img src="assets/tags/stat-tokens.svg" alt="92% fewer tokens" height="38" />
+  <img src="assets/tags/stat-tools.svg" alt="43 MCP tools" height="38" />
+  <img src="assets/tags/stat-hooks.svg" alt="12 auto hooks" height="38" />
+  <img src="assets/tags/stat-deps.svg" alt="0 external DBs" height="38" />
+  <img src="assets/tags/stat-tests.svg" alt="654 tests passing" height="38" />
 </p>
 
 <p align="center">

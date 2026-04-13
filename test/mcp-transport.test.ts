@@ -149,4 +149,81 @@ describe("processLine — malformed input", () => {
     // No jsonrpc field, no id — drop without responding.
     expect(c.out).toHaveLength(0);
   });
+
+  it("silently drops a malformed message with a non-primitive id (can't safely echo)", async () => {
+    const c = collector();
+    await processLine(
+      JSON.stringify({ id: { nested: true }, method: "broken" }),
+      okHandler,
+      c.writeOut,
+      c.writeErr,
+    );
+    // Malformed shape + non-primitive id — can't echo id back, drop silently.
+    expect(c.out).toHaveLength(0);
+  });
+});
+
+describe("processLine — id type validation (JSON-RPC §4)", () => {
+  it("rejects a request whose id is an object with -32600 and id: null", async () => {
+    const c = collector();
+    const handlerCalled = vi.fn(okHandler);
+    await processLine(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id: { bogus: true },
+        method: "tools/list",
+      }),
+      handlerCalled,
+      c.writeOut,
+      c.writeErr,
+    );
+    expect(handlerCalled).not.toHaveBeenCalled();
+    expect(c.out).toHaveLength(1);
+    expect(c.out[0].id).toBeNull();
+    expect(c.out[0].error?.code).toBe(-32600);
+    expect(c.out[0].error?.message).toContain("id must be");
+  });
+
+  it("rejects a request whose id is an array", async () => {
+    const c = collector();
+    const handlerCalled = vi.fn(okHandler);
+    await processLine(
+      JSON.stringify({ jsonrpc: "2.0", id: [1, 2], method: "tools/list" }),
+      handlerCalled,
+      c.writeOut,
+      c.writeErr,
+    );
+    expect(handlerCalled).not.toHaveBeenCalled();
+    expect(c.out).toHaveLength(1);
+    expect(c.out[0].id).toBeNull();
+    expect(c.out[0].error?.code).toBe(-32600);
+  });
+
+  it("rejects a request whose id is a boolean", async () => {
+    const c = collector();
+    const handlerCalled = vi.fn(okHandler);
+    await processLine(
+      JSON.stringify({ jsonrpc: "2.0", id: true, method: "tools/list" }),
+      handlerCalled,
+      c.writeOut,
+      c.writeErr,
+    );
+    expect(handlerCalled).not.toHaveBeenCalled();
+    expect(c.out).toHaveLength(1);
+    expect(c.out[0].id).toBeNull();
+    expect(c.out[0].error?.code).toBe(-32600);
+  });
+
+  it("accepts a request with string id", async () => {
+    const c = collector();
+    await processLine(
+      JSON.stringify({ jsonrpc: "2.0", id: "abc-123", method: "ping" }),
+      okHandler,
+      c.writeOut,
+      c.writeErr,
+    );
+    expect(c.out).toHaveLength(1);
+    expect(c.out[0].id).toBe("abc-123");
+    expect(c.out[0].result).toEqual({ method: "ping" });
+  });
 });

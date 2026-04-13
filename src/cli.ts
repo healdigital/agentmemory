@@ -31,7 +31,7 @@ Quick start:
   npx @agentmemory/agentmemory          # start with local iii-engine or Docker
   npx @agentmemory/agentmemory status   # check health
   npx @agentmemory/agentmemory demo     # try it in 30 seconds (needs server running)
-  npx agentmemory-mcp                   # standalone MCP server (no engine)
+  npx --package @agentmemory/agentmemory agentmemory-mcp  # standalone MCP server (no engine)
 `);
   process.exit(0);
 }

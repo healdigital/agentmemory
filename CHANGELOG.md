@@ -4,6 +4,15 @@ All notable changes to agentmemory will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.4] — 2026-04-13
+
+Two community contributions land on top of 0.8.3 and close out the #120 npm story for real.
+
+### Fixed
+
+- **Memories saved via the standalone MCP server now survive SIGKILL** ([#122](https://github.com/rohitg00/agentmemory/pull/122), thanks [@JasonLandbridge](https://github.com/JasonLandbridge)) — `memory_save` previously only flushed to `~/.agentmemory/standalone.json` on `SIGINT`/`SIGTERM`. If the MCP server process was killed forcefully (e.g. when an agent session ended), every memory saved during that session was lost. The save handler now persists to disk immediately after every `memory_save` call, so data survives unexpected termination. Also switched to the shared `generateId("mem")` helper and a single `isoNow` shared by `createdAt`/`updatedAt` so they can't drift.
+- **OpenCode MCP config format corrected** ([#121](https://github.com/rohitg00/agentmemory/pull/121), thanks [@JasonLandbridge](https://github.com/JasonLandbridge)) — the README previously told OpenCode users to edit `.opencode/config.json` with an `mcpServers` object, but OpenCode actually uses `opencode.json` with an `mcp` object, `type: "local"`, and a `command` array. The agents table row and a new dedicated OpenCode block in the Standalone MCP section now document the correct format.
+
 ## [0.8.3] — 2026-04-13
 
 Two bug fixes reported in the public issue tracker.
@@ -85,6 +94,7 @@ See GitHub Security Advisories for CVSS scores and affected version ranges.
 
 ---
 
+[0.8.4]: https://github.com/rohitg00/agentmemory/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/rohitg00/agentmemory/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/rohitg00/agentmemory/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/rohitg00/agentmemory/compare/v0.8.0...v0.8.1

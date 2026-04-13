@@ -228,12 +228,12 @@ export function registerRetentionFunctions(
             await kv.delete(KV.memories, candidate.memoryId);
             deletedScope = "episodic";
           } else {
-            const mem = await kv.get<Memory>(KV.memories, candidate.memoryId).catch(() => null);
+            const mem = await kv.get<Memory>(KV.memories, candidate.memoryId);
             if (mem) {
               await kv.delete(KV.memories, candidate.memoryId);
               deletedScope = "episodic";
             } else {
-              const semMem = await kv.get<SemanticMemory>(KV.semantic, candidate.memoryId).catch(() => null);
+              const semMem = await kv.get<SemanticMemory>(KV.semantic, candidate.memoryId);
               if (semMem) {
                 await kv.delete(KV.semantic, candidate.memoryId);
                 deletedScope = "semantic";

@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { lstat, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import type { ISdk } from "iii-sdk";
 import type { MemoryProvider } from "../types.js";
@@ -108,6 +108,15 @@ export function registerCompressFileFunction(
       }
       if (SENSITIVE_PATH_TERMS.some((term) => lowerPath.includes(term))) {
         return { success: false, error: "refusing to process sensitive-looking path" };
+      }
+
+      try {
+        const stat = await lstat(absolutePath);
+        if (stat.isSymbolicLink()) {
+          return { success: false, error: "symlinks are not supported" };
+        }
+      } catch {
+        return { success: false, error: "file not found" };
       }
 
       let original: string;

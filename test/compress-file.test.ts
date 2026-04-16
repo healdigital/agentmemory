@@ -5,8 +5,12 @@ vi.mock("../src/logger.js", () => ({
 }));
 
 const fileStore = new Map<string, string>();
+const symlinkPaths = new Set<string>();
 
 vi.mock("node:fs/promises", () => ({
+  lstat: vi.fn(async (path: string) => ({
+    isSymbolicLink: () => symlinkPaths.has(path),
+  })),
   readFile: vi.fn(async (path: string) => {
     const value = fileStore.get(path);
     if (value === undefined) throw new Error("ENOENT");
@@ -68,6 +72,7 @@ describe("mem::compress-file", () => {
 
   beforeEach(() => {
     fileStore.clear();
+    symlinkPaths.clear();
     sdk = mockSdk();
     kv = mockKV();
     summarize = vi.fn();
@@ -76,6 +81,15 @@ describe("mem::compress-file", () => {
       kv as never,
       { name: "test-provider", summarize, compress: summarize } as never,
     );
+  });
+
+  it("rejects symlinks", async () => {
+    symlinkPaths.add("/tmp/notes.md");
+    const result = (await sdk.trigger("mem::compress-file", {
+      filePath: "/tmp/notes.md",
+    })) as { success: boolean; error: string };
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("symlink");
   });
 
   it("rejects non-markdown paths", async () => {

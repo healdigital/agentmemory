@@ -61,7 +61,13 @@ function detectProvider(env: Record<string, string>): ProviderConfig {
       baseURL: env["ANTHROPIC_BASE_URL"],
     };
   }
-  if (env["GEMINI_API_KEY"]) {
+  if (env["GEMINI_API_KEY"] || env["GOOGLE_API_KEY"]) {
+    if (!env["GEMINI_API_KEY"] && env["GOOGLE_API_KEY"]) {
+      process.stderr.write(
+        "[agentmemory] GOOGLE_API_KEY detected — treating as GEMINI_API_KEY. " +
+          "Set GEMINI_API_KEY in ~/.agentmemory/.env to silence this warning.\n",
+      );
+    }
     return {
       provider: "gemini",
       model: env["GEMINI_MODEL"] || "gemini-2.0-flash",
@@ -74,6 +80,15 @@ function detectProvider(env: Record<string, string>): ProviderConfig {
       model: env["OPENROUTER_MODEL"] || "anthropic/claude-sonnet-4-20250514",
       maxTokens,
     };
+  }
+  if (env["AGENTMEMORY_AUTO_COMPRESS"] === "true") {
+    process.stderr.write(
+      "[agentmemory] WARNING: AGENTMEMORY_AUTO_COMPRESS=true but no LLM provider key found " +
+        "(GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY). " +
+        "Falling back to agent-sdk which shares Claude Code's API quota — " +
+        "this can exhaust a Pro subscription during heavy sessions. " +
+        "Set an API key in ~/.agentmemory/.env to avoid rate limits (#149).\n",
+    );
   }
   return {
     provider: "agent-sdk",

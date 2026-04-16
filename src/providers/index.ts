@@ -71,13 +71,21 @@ function createBaseProvider(config: ProviderConfig): MemoryProvider {
         config.maxTokens,
         config.baseURL,
       );
-    case "gemini":
+    case "gemini": {
+      const geminiKey =
+        getEnvVar("GEMINI_API_KEY") ?? getEnvVar("GOOGLE_API_KEY");
+      if (!geminiKey) {
+        throw new Error(
+          "GEMINI_API_KEY (or GOOGLE_API_KEY) is required for the gemini provider",
+        );
+      }
       return new OpenRouterProvider(
-        requireEnvVar("GEMINI_API_KEY"),
+        geminiKey,
         config.model,
         config.maxTokens,
         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
       );
+    }
     case "openrouter":
       return new OpenRouterProvider(
         requireEnvVar("OPENROUTER_API_KEY"),

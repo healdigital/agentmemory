@@ -302,6 +302,22 @@ npx @agentmemory/agentmemory demo
 
 Open `http://localhost:3113` to watch the memory build live.
 
+### Session Replay
+
+Every session agentmemory records is replayable. Open the viewer, pick the **Replay** tab, and scrub through the timeline: prompts, tool calls, tool results, and responses render as discrete events with play/pause, speed control (0.5×–4×), and keyboard shortcuts (space to toggle, arrows to step).
+
+Already have older Claude Code JSONL transcripts you want to bring in?
+
+```bash
+# Import everything under the default ~/.claude/projects
+npx @agentmemory/agentmemory import-jsonl
+
+# Or import a single file
+npx @agentmemory/agentmemory import-jsonl ~/.claude/projects/-my-project/abc123.jsonl
+```
+
+Imported sessions show up in the Replay picker alongside native ones. Under the hood each entry routes through the `mem::replay::load`, `mem::replay::sessions`, and `mem::replay::import-jsonl` iii functions — no side-channel servers.
+
 ### Upgrade / Maintenance
 
 Use the maintenance command when you intentionally want to update your local runtime:

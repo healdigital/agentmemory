@@ -10,19 +10,29 @@ import { Compare } from "@/components/Compare";
 import { Agents } from "@/components/Agents";
 import { Install } from "@/components/Install";
 import { Footer } from "@/components/Footer";
+import { getProjectMeta } from "@/lib/meta";
 
 export default function Page() {
+  const meta = getProjectMeta();
   return (
     <>
       <ScrollProgress />
       <Nav />
       <main id="top">
         <Hero />
-        <Stats />
+        <Stats
+          mcpTools={meta.mcpTools}
+          hooks={meta.hooks}
+          testsPassing={meta.testsPassing}
+        />
         <Primitives />
-        <Features />
+        <Features
+          hooks={meta.hooks}
+          mcpTools={meta.mcpTools}
+          restEndpoints={meta.restEndpoints}
+        />
         <CommandCenter />
-        <LiveTerminal />
+        <LiveTerminal mcpTools={meta.mcpTools} hooks={meta.hooks} />
         <Compare />
         <Agents />
         <Install />

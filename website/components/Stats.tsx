@@ -10,23 +10,35 @@ interface StatItem {
   float?: boolean;
 }
 
-const STATS: StatItem[] = [
-  { target: 95.2, suffix: "%", label: "RETRIEVAL R@5 · LONGMEMEVAL-S", float: true },
-  { target: 92, suffix: "%", label: "FEWER INPUT TOKENS PER SESSION" },
-  { target: 44, label: "MCP TOOLS" },
-  { target: 12, label: "AUTOHOOKS" },
-  { target: 0, label: "EXTERNAL DATABASES" },
-  { target: 769, label: "TESTS PASSING" },
-];
-
-export function Stats() {
+export function Stats({
+  mcpTools,
+  hooks,
+  testsPassing,
+}: {
+  mcpTools: number;
+  hooks: number;
+  testsPassing: number;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
+
+  const STATS: StatItem[] = [
+    { target: 95.2, suffix: "%", label: "RETRIEVAL R@5 · LONGMEMEVAL-S", float: true },
+    { target: 92, suffix: "%", label: "FEWER INPUT TOKENS PER SESSION" },
+    { target: mcpTools, label: "MCP TOOLS" },
+    { target: hooks, label: "AUTOHOOKS" },
+    { target: 0, label: "EXTERNAL DATABASES" },
+    { target: testsPassing, label: "TESTS PASSING" },
+  ];
 
   useEffect(() => {
     if (!rootRef.current) return;
-    const numEls = rootRef.current.querySelectorAll<HTMLDivElement>(
-      "[data-num]",
-    );
+    const root = rootRef.current;
+
+    // Reset per-element done flag so deps changing (e.g. a new meta snapshot
+    // at build) replays the count animation against the new target.
+    root
+      .querySelectorAll<HTMLDivElement>("[data-num]")
+      .forEach((el) => delete el.dataset.done);
 
     const count = (el: HTMLDivElement) => {
       const target = Number(el.dataset.target);
@@ -66,12 +78,12 @@ export function Stats() {
       { threshold: 0.5 },
     );
 
-    rootRef.current
+    root
       .querySelectorAll<HTMLDivElement>("[data-stat]")
       .forEach((el) => io.observe(el));
 
     return () => io.disconnect();
-  }, []);
+  }, [mcpTools, hooks, testsPassing]);
 
   return (
     <section className={styles.stats} aria-label="Benchmarks">

@@ -9,35 +9,37 @@ interface Seg {
   text: string;
 }
 
-const SCRIPT: Seg[] = [
-  { t: "prompt", text: "$ " },
-  { t: "typed", text: "npx @agentmemory/agentmemory\n" },
-  { t: "plain", text: "[agentmemory] iii-engine ready on :3111\n" },
-  { t: "plain", text: "[agentmemory] 44 MCP tools registered\n" },
-  { t: "plain", text: "[agentmemory] 12 autohooks armed\n\n" },
-  { t: "prompt", text: "$ " },
-  {
-    t: "typed",
-    text: 'memory.recall({ query: "where did we land the retry logic?" })\n',
-  },
-  { t: "comment", text: "// triple-stream retrieval: BM25 + vector + graph\n" },
-  { t: "ok", text: "✓ 3 memories · p50 18ms · reranked on device\n\n" },
-  { t: "plain", text: "→ " },
-  { t: "val", text: "src/retry.ts:47 · exponentialBackoff(max=5, jitter=true)\n" },
-  { t: "plain", text: "→ " },
-  {
-    t: "val",
-    text: 'commit 8f2e14c · "resolve conflict + honor x-amz headers"\n',
-  },
-  { t: "plain", text: "→ " },
-  {
-    t: "val",
-    text: 'session 2026-04-16 · "bug: race when Retry-After is empty"\n\n',
-  },
-  { t: "prompt", text: "$ " },
-  { t: "typed", text: "memory.consolidate({ project: 'pay-api' })\n" },
-  { t: "ok", text: "✓ 18 raw observations → 4 semantic memories · audit row emitted\n" },
-];
+function buildScript(mcpTools: number, hooks: number): Seg[] {
+  return [
+    { t: "prompt", text: "$ " },
+    { t: "typed", text: "npx @agentmemory/agentmemory\n" },
+    { t: "plain", text: "[agentmemory] iii-engine ready on :3111\n" },
+    { t: "plain", text: `[agentmemory] ${mcpTools} MCP tools registered\n` },
+    { t: "plain", text: `[agentmemory] ${hooks} autohooks armed\n\n` },
+    { t: "prompt", text: "$ " },
+    {
+      t: "typed",
+      text: 'memory.recall({ query: "where did we land the retry logic?" })\n',
+    },
+    { t: "comment", text: "// triple-stream retrieval: BM25 + vector + graph\n" },
+    { t: "ok", text: "✓ 3 memories · p50 18ms · reranked on device\n\n" },
+    { t: "plain", text: "→ " },
+    { t: "val", text: "src/retry.ts:47 · exponentialBackoff(max=5, jitter=true)\n" },
+    { t: "plain", text: "→ " },
+    {
+      t: "val",
+      text: 'commit 8f2e14c · "resolve conflict + honor x-amz headers"\n',
+    },
+    { t: "plain", text: "→ " },
+    {
+      t: "val",
+      text: 'session 2026-04-16 · "bug: race when Retry-After is empty"\n\n',
+    },
+    { t: "prompt", text: "$ " },
+    { t: "typed", text: "memory.consolidate({ project: 'pay-api' })\n" },
+    { t: "ok", text: "✓ 18 raw observations → 4 semantic memories · audit row emitted\n" },
+  ];
+}
 
 function classFor(type: SegType) {
   switch (type) {
@@ -54,7 +56,13 @@ function classFor(type: SegType) {
   }
 }
 
-export function LiveTerminal() {
+export function LiveTerminal({
+  mcpTools,
+  hooks,
+}: {
+  mcpTools: number;
+  hooks: number;
+}) {
   const termRef = useRef<HTMLElement>(null);
   const [status, setStatus] = useState("IDLE");
   const runningRef = useRef(false);
@@ -70,8 +78,9 @@ export function LiveTerminal() {
     caret.className = styles.caret;
     term.appendChild(caret);
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const script = buildScript(mcpTools, hooks);
 
-    for (const seg of SCRIPT) {
+    for (const seg of script) {
       const span = document.createElement("span");
       const c = classFor(seg.t);
       if (c) span.className = c;
@@ -91,7 +100,7 @@ export function LiveTerminal() {
     }
     setStatus("DONE");
     runningRef.current = false;
-  }, []);
+  }, [mcpTools, hooks]);
 
   useEffect(() => {
     const term = termRef.current;

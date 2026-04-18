@@ -57,7 +57,7 @@
   margin: 0 auto;
   padding: 0 40px;
   display: grid;
-  grid-template-columns: minmax(320px, 1fr) 1.3fr;
+  grid-template-columns: minmax(320px, 1fr) minmax(0, 1.3fr);
   gap: 40px;
   align-items: start;
 }
@@ -161,7 +161,7 @@
 
 @media (max-width: 960px) {
   .panel {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .tabs {
     grid-template-columns: 1fr 1fr;
@@ -177,5 +177,19 @@
   .tabs,
   .panel {
     padding: 0 20px;
+  }
+  .tab {
+    padding: 14px 12px;
+  }
+  .tabLabel {
+    font-size: 13px;
+  }
+  .tabSub {
+    font-size: 9px;
+    letter-spacing: 0.6px;
+  }
+  .launch {
+    padding: 12px 14px;
+    font-size: 11px;
   }
 }

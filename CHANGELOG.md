@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-04-18
+
+Visibility + correctness release. Landing site, filesystem connector, MCP standalone now actually talks to the running server, health logic stops crying wolf, audit trail closes its last gap, and every memory path has a clear policy.
+
+### Added
+- **Website** ([#164](https://github.com/rohitg00/agentmemory/pull/164)). Next.js 16 App Router landing page at `website/` — Lamborghini-inspired dark canvas, live GitHub stars pill, agents marquee with real brand logos, command-center tab showcase (viewer · iii console · state · traces), 12-tile feature grid, 10-agent MCP install selector, universal MCP JSON + one-click Cursor/VS Code deeplinks. Deploys to Vercel with Root Directory = `website/`.
+- **Filesystem connector** — new `@agentmemory/fs-watcher` package under `integrations/filesystem-watcher/` ([#163](https://github.com/rohitg00/agentmemory/pull/163), closes [#62](https://github.com/rohitg00/agentmemory/issues/62)). Node `fs.watch` based, no native deps. Emits valid `HookPayload` observations for every file change and delete, with debounce, default ignore list, text-file preview, bearer auth, and env-driven config.
+- **Security advisory drafts** for v0.8.2 CVEs ([#118](https://github.com/rohitg00/agentmemory/pull/118)). Six markdown drafts under `.github/security-advisories/` covering viewer XSS, curl-sh RCE, default 0.0.0.0 bind, unauthenticated mesh sync, Obsidian export traversal, and incomplete secret redaction. Also documents the symlink-traversal limitation of the Obsidian export fix.
+- **iii console documentation** in the README ([#157](https://github.com/rohitg00/agentmemory/pull/157)). How to launch the iii console alongside the viewer, what each page gives you for agentmemory, and the `iii-observability` config that ships turned on.
+
+### Changed
+- **Audit policy codified** ([#162](https://github.com/rohitg00/agentmemory/pull/162), closes [#125](https://github.com/rohitg00/agentmemory/issues/125)). `src/functions/audit.ts` gains a top-of-file policy block: every structural deletion emits a `recordAudit` row, scoped deletions (`governance-delete`, `forget`) write one row per call, bulk sweeps (`retention-evict`, `evict`, `auto-forget`) write one batched row per invocation. `mem::forget` no longer deletes silently — it writes a single audit row with target ids, session id, and per-type counts.
+- **Standalone MCP talks to the running server** ([#161](https://github.com/rohitg00/agentmemory/pull/161), closes [#159](https://github.com/rohitg00/agentmemory/issues/159)). `@agentmemory/mcp` now probes `GET /agentmemory/livez` at `AGENTMEMORY_URL` (defaults to `http://localhost:3111`) on first tool call. If the server is up, every tool (sessions, smart-search, recall, save, governance-delete, export, audit) routes through REST and sees exactly what hooks and the viewer see. If the probe fails, falls back to the local `InMemoryKV` so pure-standalone setups keep working. Bearer `AGENTMEMORY_SECRET` attached automatically. Handle cache invalidates on proxy failure with a 30s TTL so a later server start is picked up. Response shapes are now consistent across proxy and local branches.
+- **Retention eviction targets the right store** ([#132](https://github.com/rohitg00/agentmemory/pull/132)). `mem::retention-evict` now routes deletes to `mem:memories` or `mem:semantic` based on the candidate's `source` field, probing both namespaces when the field is missing (legacy rows). Emits a single batched audit row per sweep with `evictedIds`, `evictedEpisodic`, `evictedSemantic`, and the threshold. Retention scores gain a `source` field persisted to the store.
+
+### Fixed
+- **Health stops flagging `memory_critical` on tiny Node processes** ([#160](https://github.com/rohitg00/agentmemory/pull/160), closes [#158](https://github.com/rohitg00/agentmemory/issues/158)). Memory severity no longer escalates from heap ratio alone. Both warn and critical bands now require RSS above `memoryRssFloorBytes` (default 512 MB). When heap is tight but RSS is below the floor, a non-alerting `memory_heap_tight_NN%_rssMMmb` note is attached to the snapshot — visibility without the false positive.
+- **iii console screenshots vendored** in the README so the docs don't depend on CDN signed URLs.
+
+### Infrastructure
+- `VERSION` union extended to `0.9.0`; `ExportData.version`, `supportedVersions`, and `test/export-import.test.ts` bumped in lockstep.
+- `@agentmemory/mcp` dependency pinned at `~0.9.0` to match.
+- Tests: 777 passing (+ 14 skipped), up from 769.
+
+[0.9.0]: https://github.com/rohitg00/agentmemory/compare/v0.8.12...v0.9.0
+
 ## [0.8.13] — 2026-04-17
 
 ### Added

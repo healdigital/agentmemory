@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: "AGENTMEMORY — PERSISTENT MEMORY FOR AI CODING AGENTS",
   description:
     "The memory layer your coding agent should have had from day one. 95.2% retrieval R@5. 92% fewer tokens. 0 external databases. Works with every agent.",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: "/icon.svg",
+  },
   openGraph: {
     title: "agentmemory",
     description:

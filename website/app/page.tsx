@@ -3,6 +3,8 @@ import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
 import { Stats } from "@/components/Stats";
 import { Primitives } from "@/components/Primitives";
+import { Features } from "@/components/Features";
+import { CommandCenter } from "@/components/CommandCenter";
 import { LiveTerminal } from "@/components/LiveTerminal";
 import { Compare } from "@/components/Compare";
 import { Agents } from "@/components/Agents";
@@ -18,6 +20,8 @@ export default function Page() {
         <Hero />
         <Stats />
         <Primitives />
+        <Features />
+        <CommandCenter />
         <LiveTerminal />
         <Compare />
         <Agents />

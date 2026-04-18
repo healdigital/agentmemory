@@ -4,11 +4,22 @@
   border-top: 1px solid var(--charcoal);
 }
 .cards {
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto 56px;
   padding: 0 40px;
   display: grid;
-  gap: 16px;
+  gap: 28px;
+}
+.step {
+  display: grid;
+  gap: 10px;
+}
+.stepLabel {
+  font-size: 11px;
+  letter-spacing: 0.96px;
+  color: var(--gold);
+  text-transform: uppercase;
+  font-weight: 700;
 }
 .box {
   display: grid;

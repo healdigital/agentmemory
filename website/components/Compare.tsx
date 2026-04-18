@@ -10,7 +10,7 @@ const ROWS = [
 
 export function Compare() {
   return (
-    <section className={styles.compare} aria-labelledby="cmp-title">
+    <section className={styles.compare} id="compare" aria-labelledby="cmp-title">
       <header className="section-head">
         <span className="section-eyebrow">VS.</span>
         <h2 id="cmp-title" className="section-title">

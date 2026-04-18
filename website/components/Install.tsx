@@ -2,45 +2,57 @@
 
 import { useState } from "react";
 import styles from "./Install.module.css";
+import { AgentInstall } from "./AgentInstall";
 
-const CMDS = [
+interface Cmd {
+  label: string;
+  cmd: string;
+  hint: string;
+}
+
+const SIMPLE: Cmd[] = [
   {
+    label: "1. START THE MEMORY SERVER",
     cmd: "npx @agentmemory/agentmemory",
-    hint: "CLICK TO COPY",
+    hint: "RUNS ON :3111 · VIEWER ON :3113",
   },
   {
-    cmd: "curl -fsSL https://install.iii.dev/console/main/install.sh | sh",
-    hint: "CLICK TO COPY · OPTIONAL DEV CONSOLE",
+    label: "2. OPEN THE LIVE VIEWER",
+    cmd: "open http://localhost:3113",
+    hint: "SESSIONS · MEMORIES · GRAPH · HEALTH",
   },
 ];
 
-function CopyBox({ cmd, hint }: { cmd: string; hint: string }) {
+function CopyBox({ label, cmd, hint }: Cmd) {
   const [copied, setCopied] = useState(false);
-  const [label, setLabel] = useState(hint);
+  const [text, setText] = useState(hint);
 
   const onClick = async () => {
     try {
       await navigator.clipboard.writeText(cmd);
       setCopied(true);
-      setLabel("COPIED");
+      setText("COPIED");
       setTimeout(() => {
         setCopied(false);
-        setLabel(hint);
+        setText(hint);
       }, 1600);
     } catch {
-      setLabel("CLIPBOARD BLOCKED");
+      setText("CLIPBOARD BLOCKED");
     }
   };
 
   return (
-    <button
-      className={`${styles.box} ${copied ? styles.boxCopied : ""}`}
-      onClick={onClick}
-    >
-      <span className={styles.prompt}>$</span>
-      <span className={styles.cmd}>{cmd}</span>
-      <span className={styles.hint}>{label}</span>
-    </button>
+    <div className={styles.step}>
+      <div className={styles.stepLabel}>{label}</div>
+      <button
+        className={`${styles.box} ${copied ? styles.boxCopied : ""}`}
+        onClick={onClick}
+      >
+        <span className={styles.prompt}>$</span>
+        <span className={styles.cmd}>{cmd}</span>
+        <span className={styles.hint}>{text}</span>
+      </button>
+    </div>
   );
 }
 
@@ -50,17 +62,18 @@ export function Install() {
       <header className="section-head">
         <span className="section-eyebrow">SHIP IT</span>
         <h2 id="install-title" className="section-title">
-          ONE COMMAND. ZERO CONFIG.
+          THREE STEPS.<br />ANY AGENT.
         </h2>
         <p className="section-lede">
-          RUNS ON YOUR MACHINE. YOUR DATA STAYS LOCAL. BRING YOUR OWN CLAUDE
-          SUBSCRIPTION OR API KEY.
+          RUNS ON YOUR MACHINE. DATA STAYS LOCAL. BRING YOUR CLAUDE SUBSCRIPTION
+          — OR POINT IT AT ANTHROPIC, GEMINI, MINIMAX, OR OPENROUTER.
         </p>
       </header>
       <div className={styles.cards}>
-        {CMDS.map((c) => (
-          <CopyBox key={c.cmd} cmd={c.cmd} hint={c.hint} />
+        {SIMPLE.map((c) => (
+          <CopyBox key={c.cmd} {...c} />
         ))}
+        <AgentInstall />
       </div>
       <div className={styles.cta}>
         <a
@@ -78,6 +91,14 @@ export function Install() {
           rel="noopener"
         >
           NPM PACKAGE
+        </a>
+        <a
+          className="btn btn--ghost"
+          href="https://github.com/rohitg00/agentmemory/tree/main/integrations"
+          target="_blank"
+          rel="noopener"
+        >
+          INTEGRATIONS
         </a>
       </div>
     </section>

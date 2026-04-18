@@ -336,8 +336,8 @@ export function registerRetentionFunctions(
       const evictedIds: string[] = [];
       for (const candidate of candidates) {
         try {
-          let scope: string;
-          let resolvedSource: "episodic" | "semantic";
+          let scope: string | null = null;
+          let resolvedSource: "episodic" | "semantic" | null = null;
           if (candidate.source === "semantic") {
             scope = KV.semantic;
             resolvedSource = "semantic";
@@ -350,10 +350,18 @@ export function registerRetentionFunctions(
               scope = KV.memories;
               resolvedSource = "episodic";
             } else {
-              scope = KV.semantic;
-              resolvedSource = "semantic";
+              const semantic = await kv.get(KV.semantic, candidate.memoryId);
+              if (semantic !== null) {
+                scope = KV.semantic;
+                resolvedSource = "semantic";
+              }
             }
           }
+
+          if (!scope || !resolvedSource) {
+            continue;
+          }
+
           await kv.delete(scope, candidate.memoryId);
           await kv.delete(KV.retentionScores, candidate.memoryId);
           await deleteAccessLog(kv, candidate.memoryId);

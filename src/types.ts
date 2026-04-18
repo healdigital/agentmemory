@@ -489,8 +489,7 @@ export interface AuditEntry {
     | "skill_extract"
     | "core_add"
     | "core_remove"
-    | "auto_page"
-    | "relation_create";
+    | "auto_page";
   userId?: string;
   functionId: string;
   targetIds: string[];
@@ -807,6 +806,7 @@ export interface RetentionScore {
   reinforcementBoost: number;
   lastAccessed: string;
   accessCount: number;
+  source?: "episodic" | "semantic";
 }
 
 export interface DecayConfig {

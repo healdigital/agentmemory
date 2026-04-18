@@ -1,13 +1,17 @@
 import { MemoryGraph } from "./MemoryGraph";
+import { getProjectMeta } from "@/lib/meta";
 import styles from "./Hero.module.css";
 
 export function Hero() {
+  const meta = getProjectMeta();
   return (
     <section className={styles.hero} aria-labelledby="hero-title">
       <MemoryGraph />
       <div className={styles.vignette} aria-hidden />
       <div className={styles.content}>
-        <div className={styles.chip}>ZERO EXTERNAL DATABASES · v0.8.13</div>
+        <div className={styles.chip}>
+          ZERO EXTERNAL DATABASES · v{meta.version}
+        </div>
         <h1 className={styles.title} id="hero-title">
           <span className={styles.word}>AGENT</span>
           <span className={`${styles.word} ${styles.accent}`}>MEMORY</span>

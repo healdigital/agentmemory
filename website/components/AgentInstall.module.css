@@ -1,6 +1,8 @@
 .wrap {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  min-width: 0;
 }
 
 .stepLabel {
@@ -21,14 +23,16 @@
 
 .split {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) 1.3fr;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.3fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
 }
 .chipsCol {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 .colHead {
   font-size: 11px;
@@ -39,8 +43,9 @@
 }
 .chips {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
+  min-width: 0;
 }
 .chip {
   appearance: none;
@@ -96,6 +101,7 @@
 
 .snippetCol {
   display: block;
+  min-width: 0;
 }
 
 .snippet {
@@ -197,15 +203,26 @@
 
 @media (max-width: 900px) {
   .split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 640px) {
   .chips {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .code {
     font-size: 12px;
+    padding: 16px;
+  }
+  .snippetHead {
+    padding: 10px 14px;
+  }
+  .snippetHint {
+    font-size: 9px;
+    letter-spacing: 0.6px;
+  }
+  .copyRow {
+    padding: 10px 12px;
   }
 }

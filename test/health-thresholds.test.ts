@@ -48,6 +48,22 @@ describe("evaluateHealth memory severity", () => {
     expect(alerts.some((a) => a.startsWith("memory_critical_"))).toBe(true);
   });
 
+  it("records heap_tight in the warn band when RSS is below the floor", () => {
+    const s = snap({
+      memory: {
+        heapUsed: 85 * 1024 * 1024,
+        heapTotal: 100 * 1024 * 1024,
+        rss: 50 * 1024 * 1024,
+        external: 0,
+      },
+    });
+    const { status, alerts } = evaluateHealth(s);
+    expect(status).toBe("healthy");
+    expect(alerts.some((a) => a.startsWith("memory_heap_tight_"))).toBe(true);
+    expect(alerts.some((a) => a.startsWith("memory_warn_"))).toBe(false);
+    expect(alerts.some((a) => a.startsWith("memory_critical_"))).toBe(false);
+  });
+
   it("goes degraded when heap is above warn AND RSS is above the floor", () => {
     const s = snap({
       memory: {

@@ -71,7 +71,7 @@ export function evaluateHealth(
   } else if (memPercent > cfg.memoryWarnPercent && rssAboveFloor) {
     alerts.push(`memory_warn_${Math.round(memPercent)}%_rss${memMb}mb`);
     degraded = true;
-  } else if (memPercent > cfg.memoryCriticalPercent) {
+  } else if (memPercent > cfg.memoryWarnPercent) {
     alerts.push(`memory_heap_tight_${Math.round(memPercent)}%_rss${memMb}mb`);
   }
 

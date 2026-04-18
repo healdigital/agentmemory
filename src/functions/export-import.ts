@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   Session,
   CompressedObservation,
@@ -23,16 +22,18 @@ import type {
   Lesson,
   Insight,
   ExportPagination,
+  AccessLogExport,
 } from "../types.js";
+import { normalizeAccessLog } from "./access-tracker.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { VERSION } from "../version.js";
+import { recordAudit } from "./audit.js";
+import { logger } from "../logger.js";
 
 export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    { id: "mem::export", description: "Export all memory data as JSON" },
+  sdk.registerFunction("mem::export", 
     async (data?: { maxSessions?: number; offset?: number }) => {
-      const ctx = getContext();
       const rawMax = Number(data?.maxSessions);
       const maxSessions = Number.isFinite(rawMax) && rawMax > 0 ? Math.min(Math.floor(rawMax), 1000) : undefined;
       const rawOffset = Number(data?.offset);
@@ -87,6 +88,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         routines,
         signals,
         checkpoints,
+        accessLogs,
       ] = await Promise.all([
         kv.list<GraphNode>(KV.graphNodes).catch(() => []),
         kv.list<GraphEdge>(KV.graphEdges).catch(() => []),
@@ -103,6 +105,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         kv.list<Routine>(KV.routines).catch(() => []),
         kv.list<Signal>(KV.signals).catch(() => []),
         kv.list<Checkpoint>(KV.checkpoints).catch(() => []),
+        kv.list<AccessLogExport>(KV.accessLog).catch(() => []),
       ]);
 
       const exportData: ExportData = {
@@ -130,6 +133,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         routines: routines.length > 0 ? routines : undefined,
         signals: signals.length > 0 ? signals : undefined,
         checkpoints: checkpoints.length > 0 ? checkpoints : undefined,
+        accessLogs: accessLogs.length > 0 ? accessLogs : undefined,
       };
 
       if (maxSessions !== undefined) {
@@ -145,7 +149,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         (sum, arr) => sum + arr.length,
         0,
       );
-      ctx.logger.info("Export complete", {
+      logger.info("Export complete", {
         sessions: paginatedSessions.length,
         totalSessions: allSessions.length,
         observations: totalObs,
@@ -157,20 +161,22 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
     },
   );
 
-  sdk.registerFunction(
-    {
-      id: "mem::import",
-      description: "Import memory data from JSON export",
-    },
+  sdk.registerFunction("mem::import", 
     async (data: {
       exportData: ExportData;
       strategy?: "merge" | "replace" | "skip";
     }) => {
-      const ctx = getContext();
+      if (
+        !data?.exportData ||
+        typeof data.exportData !== "object" ||
+        typeof (data.exportData as { version?: unknown }).version !== "string"
+      ) {
+        return { success: false, error: "exportData with string version is required" };
+      }
       const strategy = data.strategy || "merge";
       const importData = data.exportData;
 
-      const supportedVersions = new Set(["0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.6.1", "0.7.0", "0.7.2", "0.7.3", "0.7.4"]);
+      const supportedVersions = new Set(["0.3.0", "0.4.0", "0.5.0", "0.6.0", "0.6.1", "0.7.0", "0.7.2", "0.7.3", "0.7.4", "0.7.5", "0.7.6", "0.7.7", "0.7.9", "0.8.0", "0.8.1", "0.8.2", "0.8.3", "0.8.4", "0.8.5", "0.8.6", "0.8.7", "0.8.8", "0.8.9", "0.8.10", "0.8.11", "0.8.12", "0.8.13"]);
       if (!supportedVersions.has(importData.version)) {
         return {
           success: false,
@@ -183,6 +189,7 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
       const MAX_SUMMARIES = 10_000;
       const MAX_OBS_PER_SESSION = 5_000;
       const MAX_TOTAL_OBSERVATIONS = 500_000;
+      const MAX_ACCESS_LOGS = 50_000;
 
       if (!Array.isArray(importData.sessions)) {
         return { success: false, error: "sessions must be an array" };
@@ -320,6 +327,12 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
         for (const p of await kv.list<{ id: string }>(KV.procedural).catch(() => [])) {
           await kv.delete(KV.procedural, p.id);
         }
+        for (const profile of await kv.list<ProjectProfile>(KV.profiles).catch(() => [])) {
+          await kv.delete(KV.profiles, profile.project);
+        }
+        for (const a of await kv.list<AccessLogExport>(KV.accessLog).catch(() => [])) {
+          await kv.delete(KV.accessLog, a.memoryId);
+        }
       }
 
       for (const session of importData.sessions) {
@@ -414,6 +427,20 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
             if (existing) { stats.skipped++; continue; }
           }
           await kv.set(KV.procedural, proc.id, proc);
+        }
+      }
+      if (importData.profiles) {
+        for (const profile of importData.profiles) {
+          if (strategy === "skip") {
+            const existing = await kv
+              .get<ProjectProfile>(KV.profiles, profile.project)
+              .catch(() => null);
+            if (existing) {
+              stats.skipped++;
+              continue;
+            }
+          }
+          await kv.set(KV.profiles, profile.project, profile);
         }
       }
 
@@ -516,8 +543,40 @@ export function registerExportImportFunction(sdk: ISdk, kv: StateKV): void {
           await kv.set(KV.insights, insight.id, insight);
         }
       }
+      if (importData.accessLogs) {
+        if (!Array.isArray(importData.accessLogs)) {
+          return { success: false, error: "accessLogs must be an array" };
+        }
+        if (importData.accessLogs.length > MAX_ACCESS_LOGS) {
+          return {
+            success: false,
+            error: `Too many access logs (max ${MAX_ACCESS_LOGS})`,
+          };
+        }
+        const memoryIds = new Set<string>(
+          importData.memories.map((m) => m.id),
+        );
+        for (const raw of importData.accessLogs) {
+          const log = normalizeAccessLog(raw);
+          if (!log.memoryId || !memoryIds.has(log.memoryId)) continue;
+          if (strategy === "skip") {
+            const existing = await kv
+              .get(KV.accessLog, log.memoryId)
+              .catch(() => null);
+            if (existing) {
+              stats.skipped++;
+              continue;
+            }
+          }
+          await kv.set(KV.accessLog, log.memoryId, log);
+        }
+      }
 
-      ctx.logger.info("Import complete", { strategy, ...stats });
+      logger.info("Import complete", { strategy, ...stats });
+      await recordAudit(kv, "import", "mem::import", [], {
+        strategy,
+        stats,
+      });
       return { success: true, strategy, ...stats };
     },
   );

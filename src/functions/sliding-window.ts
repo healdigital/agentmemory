@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   CompressedObservation,
   EnrichedChunk,
@@ -7,6 +6,8 @@ import type {
 } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
+import { recordAudit } from "./audit.js";
+import { logger } from "../logger.js";
 
 const SLIDING_WINDOW_SYSTEM = `You are a contextual enrichment engine. Given a primary observation and its surrounding context window (previous and next observations from the same session), produce an enriched version.
 
@@ -117,31 +118,36 @@ export function registerSlidingWindowFunction(
   kv: StateKV,
   provider: MemoryProvider,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::enrich-window",
-      description:
-        "Enrich observation using sliding window context for self-containment",
-    },
+  sdk.registerFunction("mem::enrich-window", 
     async (data: {
       observationId: string;
       sessionId: string;
       lookback?: number;
       lookahead?: number;
     }) => {
-      const ctx = getContext();
+      if (
+        !data ||
+        typeof data.sessionId !== "string" ||
+        !data.sessionId.trim() ||
+        typeof data.observationId !== "string" ||
+        !data.observationId.trim()
+      ) {
+        return { success: false, error: "sessionId and observationId are required" };
+      }
+      const sessionId = data.sessionId.trim();
+      const observationId = data.observationId.trim();
       const hprev = data.lookback ?? 3;
       const hnext = data.lookahead ?? 2;
 
       const allObs = await kv.list<CompressedObservation>(
-        KV.observations(data.sessionId),
+        KV.observations(sessionId),
       );
       allObs.sort(
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
 
-      const primaryIdx = allObs.findIndex((o) => o.id === data.observationId);
+      const primaryIdx = allObs.findIndex((o) => o.id === observationId);
       if (primaryIdx === -1) {
         return { success: false, error: "Observation not found" };
       }
@@ -167,7 +173,7 @@ export function registerSlidingWindowFunction(
         const parsed = parseEnrichedXml(response);
 
         if (!parsed) {
-          ctx.logger.warn("Failed to parse enrichment XML", {
+          logger.warn("Failed to parse enrichment XML", {
             obsId: data.observationId,
           });
           return { success: false, error: "parse_failed" };
@@ -175,8 +181,8 @@ export function registerSlidingWindowFunction(
 
         const enriched: EnrichedChunk = {
           id: generateId("ec"),
-          originalObsId: data.observationId,
-          sessionId: data.sessionId,
+          originalObsId: observationId,
+          sessionId,
           content: parsed.content,
           resolvedEntities: parsed.resolvedEntities,
           preferences: parsed.preferences,
@@ -187,13 +193,18 @@ export function registerSlidingWindowFunction(
         };
 
         await kv.set(
-          KV.enrichedChunks(data.sessionId),
-          data.observationId,
+          KV.enrichedChunks(sessionId),
+          observationId,
           enriched,
         );
+        await recordAudit(kv, "observe", "mem::enrich-window", [enriched.id], {
+          action: "persist_enriched_chunk",
+          sessionId,
+          observationId,
+        });
 
-        ctx.logger.info("Observation enriched via sliding window", {
-          obsId: data.observationId,
+        logger.info("Observation enriched via sliding window", {
+          obsId: observationId,
           entitiesResolved: Object.keys(parsed.resolvedEntities).length,
           preferencesFound: parsed.preferences.length,
           bridges: parsed.contextBridges.length,
@@ -202,26 +213,25 @@ export function registerSlidingWindowFunction(
         return { success: true, enriched };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Sliding window enrichment failed", { error: msg });
+        logger.error("Sliding window enrichment failed", { error: msg });
         return { success: false, error: msg };
       }
     },
   );
 
-  sdk.registerFunction(
-    {
-      id: "mem::enrich-session",
-      description: "Enrich all observations in a session using sliding windows",
-    },
+  sdk.registerFunction("mem::enrich-session", 
     async (data: {
       sessionId: string;
       lookback?: number;
       lookahead?: number;
       minImportance?: number;
     }) => {
-      const ctx = getContext();
+      if (!data || typeof data.sessionId !== "string" || !data.sessionId.trim()) {
+        return { success: false, error: "sessionId is required" };
+      }
+      const sessionId = data.sessionId.trim();
       const allObs = await kv.list<CompressedObservation>(
-        KV.observations(data.sessionId),
+        KV.observations(sessionId),
       );
       const minImp = data.minImportance ?? 4;
       const toEnrich = allObs.filter((o) => o.importance >= minImp);
@@ -231,12 +241,12 @@ export function registerSlidingWindowFunction(
 
       for (const obs of toEnrich) {
         try {
-          const result = (await sdk.trigger("mem::enrich-window", {
+          const result = (await sdk.trigger({ function_id: "mem::enrich-window", payload: {
             observationId: obs.id,
-            sessionId: data.sessionId,
+            sessionId,
             lookback: data.lookback ?? 3,
             lookahead: data.lookahead ?? 2,
-          })) as { success?: boolean } | undefined;
+          } })) as { success?: boolean } | undefined;
           if (result?.success) enriched++;
           else failed++;
         } catch {
@@ -244,8 +254,8 @@ export function registerSlidingWindowFunction(
         }
       }
 
-      ctx.logger.info("Session enrichment complete", {
-        sessionId: data.sessionId,
+      logger.info("Session enrichment complete", {
+        sessionId,
         total: toEnrich.length,
         enriched,
         failed,

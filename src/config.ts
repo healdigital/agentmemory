@@ -44,14 +44,30 @@ function loadEnvFile(): Record<string, string> {
 function detectProvider(env: Record<string, string>): ProviderConfig {
   const maxTokens = parseInt(env["MAX_TOKENS"] || "4096", 10);
 
+  // MiniMax: Anthropic-compatible API, requires raw fetch to avoid SDK stainless headers
+  if (env["MINIMAX_API_KEY"]) {
+    return {
+      provider: "minimax",
+      model: env["MINIMAX_MODEL"] || "MiniMax-M2.7",
+      maxTokens,
+    };
+  }
+
   if (env["ANTHROPIC_API_KEY"]) {
     return {
       provider: "anthropic",
       model: env["ANTHROPIC_MODEL"] || "claude-sonnet-4-20250514",
       maxTokens,
+      baseURL: env["ANTHROPIC_BASE_URL"],
     };
   }
-  if (env["GEMINI_API_KEY"]) {
+  if (env["GEMINI_API_KEY"] || env["GOOGLE_API_KEY"]) {
+    if (!env["GEMINI_API_KEY"] && env["GOOGLE_API_KEY"]) {
+      process.stderr.write(
+        "[agentmemory] GOOGLE_API_KEY detected — treating as GEMINI_API_KEY. " +
+          "Set GEMINI_API_KEY in ~/.agentmemory/.env to silence this warning.\n",
+      );
+    }
     return {
       provider: "gemini",
       model: env["GEMINI_MODEL"] || "gemini-2.0-flash",
@@ -64,6 +80,15 @@ function detectProvider(env: Record<string, string>): ProviderConfig {
       model: env["OPENROUTER_MODEL"] || "anthropic/claude-sonnet-4-20250514",
       maxTokens,
     };
+  }
+  if (env["AGENTMEMORY_AUTO_COMPRESS"] === "true") {
+    process.stderr.write(
+      "[agentmemory] WARNING: AGENTMEMORY_AUTO_COMPRESS=true but no LLM provider key found " +
+        "(GEMINI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY). " +
+        "Falling back to agent-sdk which shares Claude Code's API quota — " +
+        "this can exhaust a Pro subscription during heavy sessions. " +
+        "Set an API key in ~/.agentmemory/.env to avoid rate limits (#149).\n",
+    );
   }
   return {
     provider: "agent-sdk",
@@ -184,6 +209,29 @@ export function isConsolidationEnabled(): boolean {
   return getMergedEnv()["CONSOLIDATION_ENABLED"] === "true";
 }
 
+// Per-observation LLM compression is OFF by default as of 0.8.8 (see #138).
+// When disabled, observations are captured and indexed via a synthetic
+// (zero-LLM) compression path so recall/search still works. Users who want
+// richer LLM-generated summaries can set AGENTMEMORY_AUTO_COMPRESS=true in
+// ~/.agentmemory/.env — but should expect their Claude API token usage to
+// climb proportionally with session tool-use frequency.
+export function isAutoCompressEnabled(): boolean {
+  return getMergedEnv()["AGENTMEMORY_AUTO_COMPRESS"] === "true";
+}
+
+// Hook-level context injection into Claude Code's conversation is OFF by
+// default as of 0.8.10 (see #143). When disabled, pre-tool-use and
+// session-start hooks still POST observations for background capture, but
+// never write context to stdout — so Claude Code doesn't inject an extra
+// ~4000-char blob into every tool turn. 0.8.8 stopped the agentmemory-side
+// Claude calls (via ANTHROPIC_API_KEY); this stops the Claude Code-side
+// token burn where every tool call silently grew the model input window.
+// Users who want the in-conversation context injection explicitly opt in
+// with AGENTMEMORY_INJECT_CONTEXT=true and get a loud startup warning.
+export function isContextInjectionEnabled(): boolean {
+  return getMergedEnv()["AGENTMEMORY_INJECT_CONTEXT"] === "true";
+}
+
 export function getConsolidationDecayDays(): number {
   return safeParseInt(getMergedEnv()["CONSOLIDATION_DECAY_DAYS"], 30);
 }
@@ -205,6 +253,7 @@ const VALID_PROVIDERS = new Set([
   "gemini",
   "openrouter",
   "agent-sdk",
+  "minimax",
 ]);
 
 export function loadFallbackConfig(): FallbackConfig {

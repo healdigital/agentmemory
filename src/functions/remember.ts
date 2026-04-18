@@ -1,13 +1,13 @@
-import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
+import { TriggerAction, type ISdk } from "iii-sdk";
 import type { Memory } from "../types.js";
 import { KV, generateId, jaccardSimilarity } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { withKeyedLock } from "../state/keyed-mutex.js";
+import { deleteAccessLog } from "./access-tracker.js";
+import { logger } from "../logger.js";
 
 export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    { id: "mem::remember" },
+  sdk.registerFunction("mem::remember", 
     async (data: {
       content: string;
       type?: string;
@@ -16,7 +16,6 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
       ttlDays?: number;
       sourceObservationIds?: string[];
     }) => {
-      const ctx = getContext();
       if (
         !data.content ||
         typeof data.content !== "string" ||
@@ -98,12 +97,16 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
         await kv.set(KV.memories, memory.id, memory);
 
         if (supersededId) {
-          sdk.triggerVoid("mem::cascade-update", {
-            supersededMemoryId: supersededId,
+          await sdk.trigger({
+            function_id: "mem::cascade-update",
+            payload: {
+              supersededMemoryId: supersededId,
+            },
+            action: TriggerAction.Void(),
           });
         }
 
-        ctx.logger.info("Memory saved", {
+        logger.info("Memory saved", {
           memId: memory.id,
           type: memory.type,
         });
@@ -112,18 +115,17 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::forget" },
+  sdk.registerFunction("mem::forget", 
     async (data: {
       sessionId?: string;
       observationIds?: string[];
       memoryId?: string;
     }) => {
-      const ctx = getContext();
       let deleted = 0;
 
       if (data.memoryId) {
         await kv.delete(KV.memories, data.memoryId);
+        await deleteAccessLog(kv, data.memoryId);
         deleted++;
       }
 
@@ -155,7 +157,7 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
         deleted += 2;
       }
 
-      ctx.logger.info("Memory forgotten", { deleted });
+      logger.info("Memory forgotten", { deleted });
       return { success: true, deleted };
     },
   );

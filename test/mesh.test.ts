@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("iii-sdk", () => ({
-  getContext: () => ({
-    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-  }),
+vi.mock("../src/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import { registerMeshFunction } from "../src/functions/mesh.js";
@@ -42,14 +40,17 @@ function mockKV() {
 function mockSdk() {
   const functions = new Map<string, Function>();
   return {
-    registerFunction: (opts: { id: string }, handler: Function) => {
-      functions.set(opts.id, handler);
+    registerFunction: (idOrOpts: string | { id: string }, handler: Function) => {
+      const id = typeof idOrOpts === "string" ? idOrOpts : idOrOpts.id;
+      functions.set(id, handler);
     },
     registerTrigger: () => {},
-    trigger: async (id: string, data: unknown) => {
+    trigger: async (idOrInput: string | { function_id: string; payload: unknown }, data?: unknown) => {
+      const id = typeof idOrInput === "string" ? idOrInput : idOrInput.function_id;
+      const payload = typeof idOrInput === "string" ? data : idOrInput.payload;
       const fn = functions.get(id);
       if (!fn) throw new Error(`No function: ${id}`);
-      return fn(data);
+      return fn(payload);
     },
   };
 }
@@ -177,6 +178,60 @@ describe("Mesh Functions", () => {
       expect(result.success).toBe(true);
       expect(result.peers.length).toBe(2);
       expect(result.peers.map((p) => p.name).sort()).toEqual(["peer-1", "peer-2"]);
+    });
+  });
+
+  describe("mesh-sync", () => {
+    it("requires a configured shared secret", async () => {
+      const regResult = (await sdk.trigger("mem::mesh-register", {
+        url: "https://peer1.example.com",
+        name: "peer-1",
+      })) as { success: boolean; peer: MeshPeer };
+
+      const result = (await sdk.trigger("mem::mesh-sync", {
+        peerId: regResult.peer.id,
+        direction: "push",
+      })) as { success: boolean; error: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("AGENTMEMORY_SECRET");
+    });
+
+    it("sends authorization headers to peers when syncing", async () => {
+      const authedSdk = mockSdk();
+      const authedKv = mockKV();
+      registerMeshFunction(authedSdk as never, authedKv as never, "mesh-secret");
+
+      const fetchMock = vi.fn(async () =>
+        new Response(JSON.stringify({ accepted: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+      vi.stubGlobal("fetch", fetchMock);
+
+      const regResult = (await authedSdk.trigger("mem::mesh-register", {
+        url: "https://peer2.example.com",
+        name: "peer-2",
+      })) as { success: boolean; peer: MeshPeer };
+
+      const result = (await authedSdk.trigger("mem::mesh-sync", {
+        peerId: regResult.peer.id,
+        direction: "push",
+      })) as { success: boolean; results: Array<{ errors: string[] }> };
+
+      expect(result.success).toBe(true);
+      expect(result.results[0].errors).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://peer2.example.com/agentmemory/mesh/receive",
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            Authorization: "Bearer mesh-secret",
+          }),
+        }),
+      );
+
+      vi.unstubAllGlobals();
     });
   });
 

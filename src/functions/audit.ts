@@ -1,6 +1,7 @@
 import type { AuditEntry } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
+import { logger } from "../logger.js";
 
 export async function recordAudit(
   kv: StateKV,
@@ -23,6 +24,29 @@ export async function recordAudit(
   };
   await kv.set(KV.audit, entry.id, entry);
   return entry;
+}
+
+export async function safeAudit(
+  kv: StateKV,
+  operation: AuditEntry["operation"],
+  functionId: string,
+  targetIds: string[],
+  details: Record<string, unknown> = {},
+  qualityScore?: number,
+  userId?: string,
+): Promise<void> {
+  try {
+    await recordAudit(kv, operation, functionId, targetIds, details, qualityScore, userId);
+  } catch (err) {
+    try {
+      logger.warn("audit write failed", {
+        functionId,
+        operation,
+        targetIds,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    } catch {}
+  }
 }
 
 export async function queryAudit(

@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   GraphNode,
   GraphEdge,
@@ -10,6 +9,7 @@ import type {
 } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
+import { logger } from "../logger.js";
 
 const TEMPORAL_EXTRACTION_SYSTEM = `You are a temporal knowledge extraction engine. Given observations, extract entities AND their temporal relationships with full context metadata.
 
@@ -154,12 +154,7 @@ export function registerTemporalGraphFunctions(
   kv: StateKV,
   provider: MemoryProvider,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::temporal-graph-extract",
-      description:
-        "Extract temporal knowledge graph with context metadata from observations",
-    },
+  sdk.registerFunction("mem::temporal-graph-extract", 
     async (data: {
       observations: Array<{
         id: string;
@@ -171,7 +166,6 @@ export function registerTemporalGraphFunctions(
         timestamp: string;
       }>;
     }) => {
-      const ctx = getContext();
       if (!data.observations || data.observations.length === 0) {
         return { success: false, error: "No observations provided" };
       }
@@ -263,7 +257,7 @@ export function registerTemporalGraphFunctions(
           existingEdges.push(edge);
         }
 
-        ctx.logger.info("Temporal graph extraction complete", {
+        logger.info("Temporal graph extraction complete", {
           nodes: nodes.length,
           edges: edges.length,
         });
@@ -274,18 +268,13 @@ export function registerTemporalGraphFunctions(
         };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Temporal graph extraction failed", { error: msg });
+        logger.error("Temporal graph extraction failed", { error: msg });
         return { success: false, error: msg };
       }
     },
   );
 
-  sdk.registerFunction(
-    {
-      id: "mem::temporal-query",
-      description:
-        "Query entity state at a specific point in time with full history",
-    },
+  sdk.registerFunction("mem::temporal-query", 
     async (data: {
       entityName: string;
       asOf?: string;
@@ -363,12 +352,7 @@ export function registerTemporalGraphFunctions(
     },
   );
 
-  sdk.registerFunction(
-    {
-      id: "mem::differential-state",
-      description:
-        "Compute state changes between two entities over time",
-    },
+  sdk.registerFunction("mem::differential-state", 
     async (data: {
       entityName: string;
       from?: string;

@@ -1,11 +1,14 @@
-import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
-import type { RawObservation, HookPayload, Session } from "../types.js";
+import { TriggerAction, type ISdk } from "iii-sdk";
+import type { RawObservation, HookPayload } from "../types.js";
 import { KV, STREAM, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { stripPrivateData } from "./privacy.js";
 import { DedupMap } from "./dedup.js";
 import { withKeyedLock } from "../state/keyed-mutex.js";
+import { isAutoCompressEnabled } from "../config.js";
+import { buildSyntheticCompression } from "./compress-synthetic.js";
+import { getSearchIndex } from "./search.js";
+import { logger } from "../logger.js";
 
 export function registerObserveFunction(
   sdk: ISdk,
@@ -13,13 +16,8 @@ export function registerObserveFunction(
   dedupMap?: DedupMap,
   maxObservationsPerSession?: number,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::observe",
-      description: "Capture and store a tool-use observation",
-    },
+  sdk.registerFunction("mem::observe", 
     async (payload: HookPayload) => {
-      const ctx = getContext();
 
       if (
         !payload?.sessionId ||
@@ -104,38 +102,94 @@ export function registerObserveFunction(
           dedupMap.record(dedupHash);
         }
 
-        sdk.triggerVoid("stream::set", {
+        await sdk.trigger({
+          function_id: "stream::set",
+          payload: {
           stream_name: STREAM.name,
           group_id: STREAM.group(payload.sessionId),
           item_id: obsId,
           data: { type: "raw", observation: raw },
+          },
         });
 
-        sdk.triggerVoid("stream::set", {
-          stream_name: STREAM.name,
-          group_id: STREAM.viewerGroup,
-          item_id: obsId,
-          data: { type: "raw", observation: raw, sessionId: payload.sessionId },
+        await sdk.trigger({
+          function_id: "stream::send",
+          payload: {
+            stream_name: STREAM.name,
+            group_id: STREAM.viewerGroup,
+            id: `raw-${obsId}`,
+            type: "raw_observation",
+            data: { type: "raw", observation: raw, sessionId: payload.sessionId },
+          },
+          action: TriggerAction.Void(),
         });
 
-        const session = await kv.get<Session>(KV.sessions, payload.sessionId);
+        const session = await kv.get<{ observationCount?: number }>(
+          KV.sessions,
+          payload.sessionId,
+        );
         if (session) {
-          await kv.set(KV.sessions, payload.sessionId, {
-            ...session,
-            observationCount: (session.observationCount || 0) + 1,
+          await kv.update(KV.sessions, payload.sessionId, [
+            { type: "set", path: "updatedAt", value: new Date().toISOString() },
+            {
+              type: "set",
+              path: "observationCount",
+              value: (session.observationCount || 0) + 1,
+            },
+          ]);
+        }
+
+        // Per-observation LLM compression is opt-in as of 0.8.8 (#138).
+        // Default path: build a zero-LLM synthetic compression so recall
+        // and BM25 search still work without burning the user's Claude
+        // token allocation on every tool invocation.
+        if (isAutoCompressEnabled()) {
+          await sdk.trigger({
+            function_id: "mem::compress",
+            payload: {
+              observationId: obsId,
+              sessionId: payload.sessionId,
+              raw,
+            },
+            action: TriggerAction.Void(),
+          });
+        } else {
+          const synthetic = buildSyntheticCompression(raw);
+          await kv.set(
+            KV.observations(payload.sessionId),
+            obsId,
+            synthetic,
+          );
+          getSearchIndex().add(synthetic);
+          await sdk.trigger({
+            function_id: "stream::set",
+            payload: {
+              stream_name: STREAM.name,
+              group_id: STREAM.group(payload.sessionId),
+              item_id: obsId,
+              data: { type: "compressed", observation: synthetic },
+            },
+          });
+          await sdk.trigger({
+            function_id: "stream::set",
+            payload: {
+              stream_name: STREAM.name,
+              group_id: STREAM.viewerGroup,
+              item_id: obsId,
+              data: {
+                type: "compressed",
+                observation: synthetic,
+                sessionId: payload.sessionId,
+              },
+            },
           });
         }
 
-        sdk.triggerVoid("mem::compress", {
-          observationId: obsId,
-          sessionId: payload.sessionId,
-          raw,
-        });
-
-        ctx.logger.info("Observation captured", {
+        logger.info("Observation captured", {
           obsId,
           sessionId: payload.sessionId,
           hook: payload.hookType,
+          compress: isAutoCompressEnabled() ? "llm" : "synthetic",
         });
         return { observationId: obsId };
       });

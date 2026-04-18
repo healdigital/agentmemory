@@ -1,4 +1,4 @@
-import { init } from "iii-sdk";
+import { registerWorker } from "iii-sdk";
 import {
   loadConfig,
   getEnvVar,
@@ -8,7 +8,9 @@ import {
   loadTeamConfig,
   loadSnapshotConfig,
   isGraphExtractionEnabled,
+  isAutoCompressEnabled,
   isConsolidationEnabled,
+  isContextInjectionEnabled,
 } from "./config.js";
 import {
   createProvider,
@@ -67,10 +69,14 @@ import { registerCascadeFunction } from "./functions/cascade.js";
 import { registerLessonsFunctions } from "./functions/lessons.js";
 import { registerObsidianExportFunction } from "./functions/obsidian-export.js";
 import { registerReflectFunctions } from "./functions/reflect.js";
+import { registerWorkingMemoryFunctions } from "./functions/working-memory.js";
+import { registerSkillExtractFunctions } from "./functions/skill-extract.js";
 import { registerSlidingWindowFunction } from "./functions/sliding-window.js";
 import { registerQueryExpansionFunction } from "./functions/query-expansion.js";
 import { registerTemporalGraphFunctions } from "./functions/temporal-graph.js";
 import { registerRetentionFunctions } from "./functions/retention.js";
+import { registerCompressFileFunction } from "./functions/compress-file.js";
+import { registerReplayFunctions } from "./functions/replay.js";
 import { registerApiTriggers } from "./triggers/api.js";
 import { registerEventTriggers } from "./triggers/events.js";
 import { registerMcpEndpoints } from "./mcp/server.js";
@@ -80,6 +86,17 @@ import { DedupMap } from "./functions/dedup.js";
 import { registerHealthMonitor } from "./health/monitor.js";
 import { initMetrics, OTEL_CONFIG } from "./telemetry/setup.js";
 import { VERSION } from "./version.js";
+
+function hasGetMeter(
+  sdk: unknown,
+): sdk is { getMeter: (name: string) => unknown } {
+  return (
+    typeof sdk === "object" &&
+    sdk !== null &&
+    "getMeter" in sdk &&
+    typeof (sdk as { getMeter?: unknown }).getMeter === "function"
+  );
+}
 
 async function main() {
   const config = loadConfig();
@@ -110,7 +127,7 @@ async function main() {
   );
   console.log(`[agentmemory] Streams: ws://localhost:${config.streamsPort}`);
 
-  const sdk = init(config.engineUrl, {
+  const sdk = registerWorker(config.engineUrl, {
     workerName: "agentmemory",
     otel: {
       serviceName: OTEL_CONFIG.serviceName,
@@ -126,11 +143,11 @@ async function main() {
 
   const vectorIndex = embeddingProvider ? new VectorIndex() : null;
 
-  initMetrics(
-    typeof (sdk as any).getMeter === "function"
-      ? (sdk as any).getMeter.bind(sdk)
-      : undefined,
-  );
+  const meterAccessor = hasGetMeter(sdk)
+    ? (sdk.getMeter.bind(sdk) as (name: string) => unknown)
+    : undefined;
+
+  initMetrics(meterAccessor as ((name: string) => import("@opentelemetry/api").Meter) | undefined);
 
   registerPrivacyFunction(sdk);
   registerObserveFunction(sdk, kv, dedupMap, config.maxObservationsPerSession);
@@ -168,6 +185,26 @@ async function main() {
   registerConsolidationPipelineFunction(sdk, kv, provider);
   console.log(`[agentmemory] Consolidation pipeline: registered (CONSOLIDATION_ENABLED=${isConsolidationEnabled() ? "true" : "false"})`);
 
+  if (isAutoCompressEnabled()) {
+    console.log(
+      `[agentmemory] WARNING: AGENTMEMORY_AUTO_COMPRESS=true — every PostToolUse observation will be sent to your LLM provider for compression. This spends API tokens proportional to your session tool-use frequency (see #138). Set AGENTMEMORY_AUTO_COMPRESS=false to disable.`,
+    );
+  } else {
+    console.log(
+      `[agentmemory] Auto-compress: OFF (default, #138) — observations indexed via zero-LLM synthetic compression. Set AGENTMEMORY_AUTO_COMPRESS=true to opt-in to LLM-powered summaries (uses your API key).`,
+    );
+  }
+
+  if (isContextInjectionEnabled()) {
+    console.log(
+      `[agentmemory] WARNING: AGENTMEMORY_INJECT_CONTEXT=true — the PreToolUse and SessionStart hooks will inject up to ~4000 chars of memory context into every tool turn. On Claude Pro this burns session tokens proportional to your tool-call frequency (see #143). Set AGENTMEMORY_INJECT_CONTEXT=false to disable.`,
+    );
+  } else {
+    console.log(
+      `[agentmemory] Context injection: OFF (default, #143) — hooks capture observations but do not inject context into Claude Code's conversation. Set AGENTMEMORY_INJECT_CONTEXT=true to opt-in (warning: expect your Claude Pro allocation to drain faster).`,
+    );
+  }
+
   const teamConfig = loadTeamConfig();
   if (teamConfig) {
     registerTeamFunction(sdk, kv, teamConfig);
@@ -184,7 +221,7 @@ async function main() {
   registerRoutinesFunction(sdk, kv);
   registerSignalsFunction(sdk, kv);
   registerCheckpointsFunction(sdk, kv);
-  registerMeshFunction(sdk, kv);
+  registerMeshFunction(sdk, kv, secret);
   registerBranchAwareFunction(sdk, kv);
   registerFlowCompressFunction(sdk, kv, provider);
   registerSentinelsFunction(sdk, kv);
@@ -196,12 +233,16 @@ async function main() {
   registerLessonsFunctions(sdk, kv);
   registerObsidianExportFunction(sdk, kv);
   registerReflectFunctions(sdk, kv, provider);
+  registerWorkingMemoryFunctions(sdk, kv, config.tokenBudget);
+  registerSkillExtractFunctions(sdk, kv, provider);
   registerCascadeFunction(sdk, kv);
 
   registerSlidingWindowFunction(sdk, kv, provider);
   registerQueryExpansionFunction(sdk, provider);
   registerTemporalGraphFunctions(sdk, kv, provider);
   registerRetentionFunctions(sdk, kv);
+  registerCompressFileFunction(sdk, kv, provider);
+  registerReplayFunctions(sdk, kv);
   console.log(
     `[agentmemory] v0.6 advanced retrieval: sliding-window, query-expansion, temporal-graph, retention-scoring`,
   );
@@ -277,7 +318,7 @@ async function main() {
     `[agentmemory] Ready. ${embeddingProvider ? "Triple-stream (BM25+Vector+Graph)" : "BM25+Graph"} search active.`,
   );
   console.log(
-    `[agentmemory] Endpoints: 103 REST + 43 MCP tools + 6 MCP resources + 3 MCP prompts`,
+    `[agentmemory] Endpoints: 107 REST + 44 MCP tools + 6 MCP resources + 3 MCP prompts`,
   );
 
   const viewerPort = config.restPort + 2;
@@ -295,7 +336,7 @@ async function main() {
   if (process.env.AUTO_FORGET_ENABLED !== "false") {
     const autoForgetTimer = setInterval(async () => {
       try {
-        await sdk.trigger("mem::auto-forget", { dryRun: false });
+        await sdk.trigger({ function_id: "mem::auto-forget", payload: { dryRun: false } });
       } catch {}
     }, autoForgetIntervalMs);
     autoForgetTimer.unref();
@@ -305,7 +346,7 @@ async function main() {
   if (process.env.LESSON_DECAY_ENABLED !== "false") {
     const lessonDecayTimer = setInterval(async () => {
       try {
-        await sdk.trigger("mem::lesson-decay-sweep", {});
+        await sdk.trigger({ function_id: "mem::lesson-decay-sweep", payload: {} });
       } catch {}
     }, 86400000);
     lessonDecayTimer.unref();
@@ -315,7 +356,7 @@ async function main() {
   if (process.env.INSIGHT_DECAY_ENABLED !== "false") {
     const insightDecayTimer = setInterval(async () => {
       try {
-        await sdk.trigger("mem::insight-decay-sweep", {});
+        await sdk.trigger({ function_id: "mem::insight-decay-sweep", payload: {} });
       } catch {}
     }, 86400000);
     insightDecayTimer.unref();
@@ -324,7 +365,7 @@ async function main() {
   if (isConsolidationEnabled()) {
     const consolidationTimer = setInterval(async () => {
       try {
-        await sdk.trigger("mem::consolidate-pipeline", {});
+        await sdk.trigger({ function_id: "mem::consolidate-pipeline", payload: {} });
       } catch {}
     }, consolidationIntervalMs);
     consolidationTimer.unref();

@@ -1,5 +1,4 @@
-import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
+import { TriggerAction, type ISdk } from "iii-sdk";
 import type {
   RawObservation,
   CompressedObservation,
@@ -19,6 +18,7 @@ import { validateOutput } from "../eval/validator.js";
 import { scoreCompression } from "../eval/quality.js";
 import { compressWithRetry } from "../eval/self-correct.js";
 import type { MetricsStore } from "../eval/metrics-store.js";
+import { logger } from "../logger.js";
 
 const VALID_TYPES = new Set<string>([
   "file_read",
@@ -66,17 +66,12 @@ export function registerCompressFunction(
   provider: MemoryProvider,
   metricsStore?: MetricsStore,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::compress",
-      description: "Compress a raw observation using LLM",
-    },
+  sdk.registerFunction("mem::compress", 
     async (data: {
       observationId: string;
       sessionId: string;
       raw: RawObservation;
     }) => {
-      const ctx = getContext();
       const startMs = Date.now();
       const prompt = buildCompressionPrompt({
         hookType: data.raw.hookType,
@@ -115,7 +110,7 @@ export function registerCompressFunction(
           if (metricsStore) {
             await metricsStore.record("mem::compress", latencyMs, false);
           }
-          ctx.logger.warn("Failed to parse compression XML", {
+          logger.warn("Failed to parse compression XML", {
             obsId: data.observationId,
             retried,
           });
@@ -140,23 +135,44 @@ export function registerCompressFunction(
 
         getSearchIndex().add(compressed);
 
-        sdk.triggerVoid("stream::set", {
-          stream_name: STREAM.name,
-          group_id: STREAM.group(data.sessionId),
-          item_id: data.observationId,
-          data: { type: "compressed", observation: compressed },
-        });
-
-        sdk.triggerVoid("stream::set", {
-          stream_name: STREAM.name,
-          group_id: STREAM.viewerGroup,
-          item_id: data.observationId,
-          data: {
-            type: "compressed",
-            observation: compressed,
-            sessionId: data.sessionId,
-          },
-        });
+        const streamResults = await Promise.allSettled([
+          sdk.trigger({
+            function_id: "stream::set",
+            payload: {
+              stream_name: STREAM.name,
+              group_id: STREAM.group(data.sessionId),
+              item_id: data.observationId,
+              data: { type: "compressed", observation: compressed },
+            },
+          }),
+          sdk.trigger({
+            function_id: "stream::send",
+            payload: {
+              stream_name: STREAM.name,
+              group_id: STREAM.viewerGroup,
+              id: `compressed-${data.observationId}`,
+              type: "compressed_observation",
+              data: {
+                type: "compressed",
+                observation: compressed,
+                sessionId: data.sessionId,
+              },
+            },
+            action: TriggerAction.Void(),
+          }),
+        ]);
+        for (const result of streamResults) {
+          if (result.status === "rejected") {
+            logger.warn("Non-fatal stream publish failure after compress", {
+              sessionId: data.sessionId,
+              observationId: data.observationId,
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            });
+          }
+        }
 
         const latencyMs = Date.now() - startMs;
         if (metricsStore) {
@@ -168,7 +184,7 @@ export function registerCompressFunction(
           );
         }
 
-        ctx.logger.info("Observation compressed", {
+        logger.info("Observation compressed", {
           obsId: data.observationId,
           type: compressed.type,
           importance: compressed.importance,
@@ -183,7 +199,7 @@ export function registerCompressFunction(
         if (metricsStore) {
           await metricsStore.record("mem::compress", latencyMs, false);
         }
-        ctx.logger.error("Compression failed", {
+        logger.error("Compression failed", {
           obsId: data.observationId,
           error: msg,
         });

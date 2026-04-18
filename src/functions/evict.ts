@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   Session,
   CompressedObservation,
@@ -8,6 +7,9 @@ import type {
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { recordAudit } from "./audit.js";
+import { deleteAccessLog } from "./access-tracker.js";
+import { logger } from "../logger.js";
 
 interface EvictionConfig {
   staleSessionDays: number;
@@ -35,13 +37,8 @@ interface EvictionStats {
 }
 
 export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    {
-      id: "mem::evict",
-      description: "Evict stale memories based on age and importance",
-    },
+  sdk.registerFunction("mem::evict", 
     async (data: { dryRun?: boolean }): Promise<EvictionStats> => {
-      const ctx = getContext();
       const dryRun = data?.dryRun ?? false;
 
       const configOverride = await kv
@@ -70,9 +67,25 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
         const age = now - new Date(session.startedAt).getTime();
         const staleDays = cfg.staleSessionDays * MS_PER_DAY;
         if (age > staleDays && !summaryIds.has(session.id)) {
-          stats.staleSessions++;
-          if (!dryRun) {
-            await kv.delete(KV.sessions, session.id).catch(() => {});
+          if (dryRun) {
+            stats.staleSessions++;
+          } else {
+            try {
+              await kv.delete(KV.sessions, session.id);
+              stats.staleSessions++;
+            } catch (err) {
+              logger.warn("Eviction delete failed", {
+                resource: "session",
+                id: session.id,
+                error: err instanceof Error ? err.message : String(err),
+              });
+              continue;
+            }
+            await recordAudit(kv, "delete", "mem::evict", [session.id], {
+              resource: "session",
+              reason: "stale_session_without_summary",
+              dryRun,
+            });
           }
         }
       }
@@ -92,11 +105,27 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
             age > maxAge &&
             (o.importance ?? 5) < cfg.lowImportanceThreshold
           ) {
-            stats.lowImportanceObs++;
-            if (!dryRun) {
-              await kv
-                .delete(KV.observations(session.id), o.id)
-                .catch(() => {});
+            if (dryRun) {
+              stats.lowImportanceObs++;
+            } else {
+              try {
+                await kv.delete(KV.observations(session.id), o.id);
+                stats.lowImportanceObs++;
+              } catch (err) {
+                logger.warn("Eviction delete failed", {
+                  resource: "observation",
+                  id: o.id,
+                  sessionId: session.id,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                continue;
+              }
+              await recordAudit(kv, "delete", "mem::evict", [o.id], {
+                resource: "observation",
+                reason: "low_importance_old_observation",
+                sessionId: session.id,
+                dryRun,
+              });
             }
           }
         }
@@ -116,12 +145,28 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
             0,
             obs.length - cfg.maxObservationsPerProject,
           );
-          stats.capEvictions += toEvict.length;
-          if (!dryRun) {
+          if (dryRun) {
+            stats.capEvictions += toEvict.length;
+          } else {
             for (const o of toEvict) {
-              await kv
-                .delete(KV.observations(o.sessionId), o.id)
-                .catch(() => {});
+              try {
+                await kv.delete(KV.observations(o.sessionId), o.id);
+                stats.capEvictions++;
+              } catch (err) {
+                logger.warn("Eviction delete failed", {
+                  resource: "observation",
+                  id: o.id,
+                  sessionId: o.sessionId,
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                continue;
+              }
+              await recordAudit(kv, "delete", "mem::evict", [o.id], {
+                resource: "observation",
+                reason: "project_observation_cap",
+                sessionId: o.sessionId,
+                dryRun,
+              });
             }
           }
         }
@@ -133,10 +178,29 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
         if (mem.forgetAfter) {
           const expiry = new Date(mem.forgetAfter).getTime();
           if (now > expiry) {
-            stats.expiredMemories++;
-            evictedMemIds.add(mem.id);
-            if (!dryRun) {
-              await kv.delete(KV.memories, mem.id).catch(() => {});
+            if (dryRun) {
+              stats.expiredMemories++;
+              evictedMemIds.add(mem.id);
+            } else {
+              try {
+                await kv.delete(KV.memories, mem.id);
+                stats.expiredMemories++;
+                evictedMemIds.add(mem.id);
+              } catch (err) {
+                logger.warn("Eviction delete failed", {
+                  resource: "memory",
+                  id: mem.id,
+                  reason: "expired_memory",
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                continue;
+              }
+              await recordAudit(kv, "delete", "mem::evict", [mem.id], {
+                resource: "memory",
+                reason: "expired_memory",
+                dryRun,
+              });
+              await deleteAccessLog(kv, mem.id);
             }
           }
         }
@@ -148,15 +212,33 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
         ) {
           const age = now - new Date(mem.createdAt).getTime();
           if (age > cfg.lowImportanceMaxDays * MS_PER_DAY) {
-            stats.nonLatestMemories++;
-            if (!dryRun) {
-              await kv.delete(KV.memories, mem.id).catch(() => {});
+            if (dryRun) {
+              stats.nonLatestMemories++;
+            } else {
+              try {
+                await kv.delete(KV.memories, mem.id);
+                stats.nonLatestMemories++;
+              } catch (err) {
+                logger.warn("Eviction delete failed", {
+                  resource: "memory",
+                  id: mem.id,
+                  reason: "old_non_latest_memory",
+                  error: err instanceof Error ? err.message : String(err),
+                });
+                continue;
+              }
+              await recordAudit(kv, "delete", "mem::evict", [mem.id], {
+                resource: "memory",
+                reason: "old_non_latest_memory",
+                dryRun,
+              });
+              await deleteAccessLog(kv, mem.id);
             }
           }
         }
       }
 
-      ctx.logger.info("Eviction complete", { stats });
+      logger.info("Eviction complete", { stats });
       return stats;
     },
   );

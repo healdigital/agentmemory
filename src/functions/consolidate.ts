@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   CompressedObservation,
   Memory,
@@ -8,6 +7,7 @@ import type {
 } from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { recordAudit } from "./audit.js";
 
 const CONSOLIDATION_SYSTEM = `You are a memory consolidation engine. Given a set of related observations from coding sessions, synthesize them into a single long-term memory.
 
@@ -26,6 +26,7 @@ Output XML:
 </memory>`;
 
 import { getXmlTag, getXmlChildren } from "../prompts/xml.js";
+import { logger } from "../logger.js";
 
 function parseMemoryXml(
   xml: string,
@@ -66,10 +67,8 @@ export function registerConsolidateFunction(
   kv: StateKV,
   provider: MemoryProvider,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::consolidate" },
+  sdk.registerFunction("mem::consolidate", 
     async (data: { project?: string; minObservations?: number }) => {
-      const ctx = getContext();
       const minObs = data.minObservations ?? 10;
 
       const sessions = await kv.list<Session>(KV.sessions);
@@ -162,6 +161,10 @@ export function registerConsolidateFunction(
           if (existingMatch) {
             existingMatch.isLatest = false;
             await kv.set(KV.memories, existingMatch.id, existingMatch);
+            await recordAudit(kv, "evolve", "mem::consolidate", [existingMatch.id], {
+              action: "mark_non_latest",
+              concept,
+            });
 
             const evolved: Memory = {
               id: generateId("mem"),
@@ -178,6 +181,12 @@ export function registerConsolidateFunction(
               isLatest: true,
             };
             await kv.set(KV.memories, evolved.id, evolved);
+            await recordAudit(kv, "evolve", "mem::consolidate", [evolved.id], {
+              action: "evolve_memory",
+              oldId: existingMatch.id,
+              newId: evolved.id,
+              concept,
+            });
             existingTitles.add(evolved.title.toLowerCase());
             consolidated++;
           } else {
@@ -191,18 +200,22 @@ export function registerConsolidateFunction(
               isLatest: true,
             };
             await kv.set(KV.memories, memory.id, memory);
+            await recordAudit(kv, "remember", "mem::consolidate", [memory.id], {
+              action: "create_memory",
+              concept,
+            });
             existingTitles.add(memory.title.toLowerCase());
             consolidated++;
           }
         } catch (err) {
-          ctx.logger.warn("Consolidation failed for concept", {
+          logger.warn("Consolidation failed for concept", {
             concept,
             error: err instanceof Error ? err.message : String(err),
           });
         }
       }
 
-      ctx.logger.info("Consolidation complete", {
+      logger.info("Consolidation complete", {
         consolidated,
         totalObs: allObs.length,
       });

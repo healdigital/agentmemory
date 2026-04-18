@@ -56,6 +56,26 @@ describe("stripPrivateData", () => {
     );
   });
 
+  it("strips OpenAI project keys", () => {
+    expect(
+      stripPrivateData("sk-proj-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJ"),
+    ).toBe("[REDACTED_SECRET]");
+  });
+
+  it("strips GitHub fine-grained service tokens", () => {
+    expect(
+      stripPrivateData("ghs_1234567890abcdefghijklmnopqrstuvwxyzAB"),
+    ).toBe("[REDACTED_SECRET]");
+  });
+
+  it("strips bearer tokens", () => {
+    expect(
+      stripPrivateData(
+        "Authorization: Bearer sk-proj-1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJ",
+      ),
+    ).toBe("Authorization: [REDACTED_SECRET]");
+  });
+
   it("handles multiple secrets in one string", () => {
     const input =
       "sk-abcdefghijklmnopqrstuv and ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij";

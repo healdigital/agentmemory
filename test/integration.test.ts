@@ -226,7 +226,9 @@ describe("agentmemory integration", () => {
 
   describe("viewer", () => {
     it("serves the viewer HTML", async () => {
-      const res = await fetch(url("/agentmemory/viewer"));
+      const res = await fetch(url("/agentmemory/viewer"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
       expect(res.status).toBe(200);
       const body = await res.text();
       expect(body).toContain("html");
@@ -258,6 +260,11 @@ describe("agentmemory integration", () => {
           },
           body: JSON.stringify({ query: "test" }),
         });
+        expect(res.status).toBe(401);
+      });
+
+      it("rejects unauthenticated viewer requests on the API port", async () => {
+        const res = await fetch(url("/agentmemory/viewer"));
         expect(res.status).toBe(401);
       });
     }

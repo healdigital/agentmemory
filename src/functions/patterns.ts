@@ -1,8 +1,8 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type { CompressedObservation, Session } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { logger } from "../logger.js";
 
 interface Pattern {
   type: "co_change" | "error_repeat" | "workflow";
@@ -13,10 +13,8 @@ interface Pattern {
 }
 
 export function registerPatternsFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    { id: "mem::patterns" },
+  sdk.registerFunction("mem::patterns", 
     async (data: { project?: string }) => {
-      const ctx = getContext();
       const patterns: Pattern[] = [];
 
       const sessions = await kv.list<Session>(KV.sessions);
@@ -98,7 +96,7 @@ export function registerPatternsFunction(sdk: ISdk, kv: StateKV): void {
 
       patterns.sort((a, b) => b.frequency - a.frequency);
 
-      ctx.logger.info("Pattern detection complete", {
+      logger.info("Pattern detection complete", {
         patterns: patterns.length,
         sessions: filtered.length,
       });
@@ -107,14 +105,12 @@ export function registerPatternsFunction(sdk: ISdk, kv: StateKV): void {
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::generate-rules" },
+  sdk.registerFunction("mem::generate-rules", 
     async (data: { project?: string }) => {
-      const ctx = getContext();
       const result = await sdk.trigger<
         { project?: string },
         { patterns: Pattern[] }
-      >("mem::patterns", data);
+      >({ function_id: "mem::patterns", payload: data });
 
       const rules: string[] = [];
 
@@ -131,7 +127,7 @@ export function registerPatternsFunction(sdk: ISdk, kv: StateKV): void {
         }
       }
 
-      ctx.logger.info("Rules generated", { count: rules.length });
+      logger.info("Rules generated", { count: rules.length });
       return { rules };
     },
   );

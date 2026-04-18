@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   CompactSearchResult,
   CompressedObservation,
@@ -7,24 +6,20 @@ import type {
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { recordAccessBatch } from "./access-tracker.js";
+import { logger } from "../logger.js";
 
 export function registerSmartSearchFunction(
   sdk: ISdk,
   kv: StateKV,
   searchFn: (query: string, limit: number) => Promise<HybridSearchResult[]>,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::smart-search",
-      description:
-        "Search with progressive disclosure: compact results first, expand specific IDs for full details",
-    },
+  sdk.registerFunction("mem::smart-search", 
     async (data: {
       query?: string;
       expandIds?: Array<string | { obsId: string; sessionId: string }>;
       limit?: number;
     }) => {
-      const ctx = getContext();
 
       if (data.expandIds && data.expandIds.length > 0) {
         const raw = data.expandIds.slice(0, 20);
@@ -53,8 +48,13 @@ export function registerSmartSearchFunction(
           if (r) expanded.push(r);
         }
 
+        void recordAccessBatch(
+          kv,
+          expanded.map((e) => e.observation.id),
+        );
+
         const truncated = data.expandIds.length > raw.length;
-        ctx.logger.info("Smart search expanded", {
+        logger.info("Smart search expanded", {
           requested: data.expandIds.length,
           attempted: raw.length,
           returned: expanded.length,
@@ -79,7 +79,12 @@ export function registerSmartSearchFunction(
         timestamp: r.observation.timestamp,
       }));
 
-      ctx.logger.info("Smart search compact", {
+      void recordAccessBatch(
+        kv,
+        compact.map((r) => r.obsId),
+      );
+
+      logger.info("Smart search compact", {
         query: data.query,
         results: compact.length,
       });

@@ -2,6 +2,7 @@ import type { ISdk } from "iii-sdk";
 import type { StateKV } from "../state/kv.js";
 import { KV, generateId } from "../state/schema.js";
 import { withKeyedLock } from "../state/keyed-mutex.js";
+import { recordAudit } from "./audit.js";
 import type {
   MeshPeer,
   Memory,
@@ -135,15 +136,21 @@ async function lwwMergeGraphNodes(
   return count;
 }
 
-export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    { id: "mem::mesh-register" },
+export function registerMeshFunction(
+  sdk: ISdk,
+  kv: StateKV,
+  meshAuthToken?: string,
+): void {
+  sdk.registerFunction("mem::mesh-register",
     async (data: {
       url: string;
       name: string;
       sharedScopes?: string[];
       syncFilter?: { project?: string };
     }) => {
+      if (!data || typeof data !== "object") {
+        return { success: false, error: "payload required" };
+      }
       if (!data.url || !data.name) {
         return { success: false, error: "url and name are required" };
       }
@@ -168,21 +175,36 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
       };
 
       await kv.set(KV.mesh, peer.id, peer);
+      await recordAudit(kv, "mesh_sync", "mem::mesh-register", [peer.id], {
+        action: "mesh.register",
+        peerId: peer.id,
+        name: peer.name,
+        url: peer.url,
+        sharedScopes: peer.sharedScopes,
+      });
       return { success: true, peer };
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::mesh-list" },
+  sdk.registerFunction("mem::mesh-list", 
     async () => {
       const peers = await kv.list<MeshPeer>(KV.mesh);
       return { success: true, peers };
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::mesh-sync" },
+  sdk.registerFunction("mem::mesh-sync",
     async (data: { peerId?: string; scopes?: string[]; direction?: "push" | "pull" | "both" }) => {
+      if (!meshAuthToken) {
+        return {
+          success: false,
+          error: "mesh sync requires AGENTMEMORY_SECRET",
+        };
+      }
+      if (!data || typeof data !== "object") {
+        data = {};
+      }
+
       const direction = data.direction || "both";
       let peers: MeshPeer[];
 
@@ -213,6 +235,11 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
 
         peer.status = "syncing";
         await kv.set(KV.mesh, peer.id, peer);
+        await recordAudit(kv, "mesh_sync", "mem::mesh-sync", [peer.id], {
+          action: "mesh.sync.start",
+          direction,
+          scopes: data.scopes || peer.sharedScopes,
+        });
 
         const scopes = data.scopes || peer.sharedScopes;
 
@@ -221,6 +248,10 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             result.errors.push("peer URL blocked: private/local address not allowed");
             peer.status = "error";
             await kv.set(KV.mesh, peer.id, peer);
+            await recordAudit(kv, "mesh_sync", "mem::mesh-sync", [peer.id], {
+              action: "mesh.sync.error",
+              error: "peer URL blocked: private/local address not allowed",
+            });
             results.push(result);
             continue;
           }
@@ -230,7 +261,10 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             try {
               const response = await fetch(`${peer.url}/agentmemory/mesh/receive`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${meshAuthToken}`,
+                },
                 body: JSON.stringify(pushData),
                 signal: AbortSignal.timeout(30000),
                 redirect: "error",
@@ -250,7 +284,13 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             try {
               const response = await fetch(
                 `${peer.url}/agentmemory/mesh/export?since=${peer.lastSyncAt || ""}`,
-                { signal: AbortSignal.timeout(30000), redirect: "error" },
+                {
+                  headers: {
+                    Authorization: `Bearer ${meshAuthToken}`,
+                  },
+                  signal: AbortSignal.timeout(30000),
+                  redirect: "error",
+                },
               );
               if (response.ok) {
                 const pullData = (await response.json()) as {
@@ -276,6 +316,15 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
         }
 
         await kv.set(KV.mesh, peer.id, peer);
+        await recordAudit(kv, "mesh_sync", "mem::mesh-sync", [peer.id], {
+          action: result.errors.length > 0 ? "mesh.sync.error" : "mesh.sync.complete",
+          direction,
+          scopes,
+          pushed: result.pushed,
+          pulled: result.pulled,
+          errors: result.errors,
+          lastSyncAt: peer.lastSyncAt,
+        });
         results.push(result);
       }
 
@@ -283,9 +332,11 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::mesh-receive" },
+  sdk.registerFunction("mem::mesh-receive",
     async (data: MeshSyncPayload) => {
+      if (!data || typeof data !== "object") {
+        return { success: false, error: "payload required" };
+      }
       let accepted = 0;
 
       accepted += await lwwMergeList(kv, KV.memories, data.memories, "mem:memory", "updatedAt");
@@ -300,6 +351,10 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
             const existing = await kv.get<MemoryRelation>(KV.relations, relKey);
             if (!existing) {
               await kv.set(KV.relations, relKey, rel);
+              await recordAudit(kv, "mesh_sync", "mem::mesh-receive", [relKey], {
+                action: "mesh.receive.relation",
+                accepted: true,
+              });
               accepted++;
             }
           });
@@ -307,18 +362,24 @@ export function registerMeshFunction(sdk: ISdk, kv: StateKV): void {
       }
       accepted += await lwwMergeGraphNodes(kv, data.graphNodes);
       accepted += await lwwMergeList(kv, KV.graphEdges, data.graphEdges, "mem:gedge", "createdAt");
+      await recordAudit(kv, "mesh_sync", "mem::mesh-receive", [], {
+        action: "mesh.receive",
+        accepted,
+      });
 
       return { success: true, accepted };
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::mesh-remove" },
+  sdk.registerFunction("mem::mesh-remove",
     async (data: { peerId: string }) => {
-      if (!data.peerId) {
+      if (!data || typeof data !== "object" || !data.peerId) {
         return { success: false, error: "peerId is required" };
       }
       await kv.delete(KV.mesh, data.peerId);
+      await recordAudit(kv, "mesh_sync", "mem::mesh-remove", [data.peerId], {
+        action: "mesh.remove",
+      });
       return { success: true };
     },
   );

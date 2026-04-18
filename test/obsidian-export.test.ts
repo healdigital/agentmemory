@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("iii-sdk", () => ({
-  getContext: () => ({
-    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-  }),
+vi.mock("../src/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const writtenFiles = new Map<string, string>();
@@ -45,14 +43,17 @@ function mockKV() {
 function mockSdk() {
   const functions = new Map<string, Function>();
   return {
-    registerFunction: (opts: { id: string }, handler: Function) => {
-      functions.set(opts.id, handler);
+    registerFunction: (idOrOpts: string | { id: string }, handler: Function) => {
+      const id = typeof idOrOpts === "string" ? idOrOpts : idOrOpts.id;
+      functions.set(id, handler);
     },
     registerTrigger: () => {},
-    trigger: async (id: string, data: unknown) => {
+    trigger: async (idOrInput: string | { function_id: string; payload: unknown }, data?: unknown) => {
+      const id = typeof idOrInput === "string" ? idOrInput : idOrInput.function_id;
+      const payload = typeof idOrInput === "string" ? data : idOrInput.payload;
       const fn = functions.get(id);
       if (!fn) throw new Error(`No function: ${id}`);
-      return fn(data);
+      return fn(payload);
     },
   };
 }
@@ -120,8 +121,10 @@ function makeSession(id: string): Session {
 describe("Obsidian Export", () => {
   let sdk: ReturnType<typeof mockSdk>;
   let kv: ReturnType<typeof mockKV>;
+  const exportRoot = "/tmp/agentmemory-export-root";
 
   beforeEach(() => {
+    process.env.AGENTMEMORY_EXPORT_ROOT = exportRoot;
     sdk = mockSdk();
     kv = mockKV();
     writtenFiles.clear();
@@ -220,13 +223,22 @@ describe("Obsidian Export", () => {
 
   it("respects custom vaultDir", async () => {
     await sdk.trigger("mem::obsidian-export", {
-      vaultDir: "/tmp/test-vault",
+      vaultDir: "/tmp/agentmemory-export-root/test-vault",
     });
 
     const hasCustomPath = [...createdDirs].some((d) =>
-      d.startsWith("/tmp/test-vault"),
+      d.startsWith("/tmp/agentmemory-export-root/test-vault"),
     );
     expect(hasCustomPath).toBe(true);
+  });
+
+  it("rejects vaultDir outside the export root", async () => {
+    const result = (await sdk.trigger("mem::obsidian-export", {
+      vaultDir: "/tmp/outside-root",
+    })) as { success: boolean; error: string };
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain(exportRoot);
   });
 
   it("skips deleted lessons", async () => {

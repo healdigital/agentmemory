@@ -43,7 +43,7 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
     async (data: { dryRun?: boolean }): Promise<EvictionStats> => {
       const ctx = getContext();
       const dryRun = data?.dryRun ?? false;
-      const { deleteImage } = await import("../utils/image-store.js");
+      const { decrementImageRef } = await import("./image-refs.js");
 
       const configOverride = await kv
         .get<Partial<EvictionConfig>>(KV.config, "eviction")
@@ -95,8 +95,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
           ) {
             stats.lowImportanceObs++;
             if (!dryRun) {
-              if (o.imageData) deleteImage(o.imageData);
-              if (o.imageRef) deleteImage(o.imageRef);
+              if (o.imageData) await decrementImageRef(kv, sdk, o.imageData);
+              if (o.imageRef) await decrementImageRef(kv, sdk, o.imageRef);
               await kv
                 .delete(KV.observations(session.id), o.id)
                 .catch(() => {});
@@ -122,8 +122,8 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
           stats.capEvictions += toEvict.length;
           if (!dryRun) {
             for (const o of toEvict) {
-              if (o.imageData) deleteImage(o.imageData);
-              if (o.imageRef) deleteImage(o.imageRef);
+              if (o.imageData) await decrementImageRef(kv, sdk, o.imageData);
+              if (o.imageRef) await decrementImageRef(kv, sdk, o.imageRef);
               await kv
                 .delete(KV.observations(o.sessionId), o.id)
                 .catch(() => {});
@@ -142,7 +142,7 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
             evictedMemIds.add(mem.id);
             if (!dryRun) {
               if (mem.imageRef) {
-                deleteImage(mem.imageRef);
+                await decrementImageRef(kv, sdk, mem.imageRef);
               }
               await kv.delete(KV.memories, mem.id).catch(() => {});
             }
@@ -159,7 +159,7 @@ export function registerEvictFunction(sdk: ISdk, kv: StateKV): void {
             stats.nonLatestMemories++;
             if (!dryRun) {
               if (mem.imageRef) {
-                deleteImage(mem.imageRef);
+                await decrementImageRef(kv, sdk, mem.imageRef);
               }
               await kv.delete(KV.memories, mem.id).catch(() => {});
             }

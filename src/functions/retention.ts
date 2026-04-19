@@ -194,7 +194,7 @@ export function registerRetentionFunctions(
       const ctx = getContext();
       const threshold = data.threshold ?? DEFAULT_DECAY.tierThresholds.cold;
       const maxEvict = data.maxEvict ?? 50;
-      const { deleteImage } = await import("../utils/image-store.js");
+      const { decrementImageRef } = await import("./image-refs.js");
 
       const allScores = await kv.list<RetentionScore>(KV.retentionScores);
       const candidates = allScores
@@ -219,7 +219,7 @@ export function registerRetentionFunctions(
         try {
           const mem = await kv.get<Memory>(KV.memories, candidate.memoryId);
           if (mem && mem.imageRef) {
-            deleteImage(mem.imageRef);
+            await decrementImageRef(kv, sdk, mem.imageRef);
           }
           await kv.delete(KV.memories, candidate.memoryId);
           await kv.delete(KV.retentionScores, candidate.memoryId);

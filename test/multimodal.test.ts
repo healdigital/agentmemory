@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll, beforeEach } from "vitest";
 import { existsSync, rmSync } from "node:fs";
 
 vi.mock("iii-sdk", () => ({
@@ -26,6 +26,9 @@ function mockKV() {
       if (!store.has(scope)) store.set(scope, new Map());
       store.get(scope)!.set(key, data);
       return data;
+    },
+    delete: async (scope: string, key: string): Promise<void> => {
+      store.get(scope)?.delete(key);
     },
     list: async <T>(scope: string): Promise<T[]> => {
       if (!store.has(scope)) return [];
@@ -60,6 +63,10 @@ describe("End-to-End Multimodal Flow", () => {
     }
   });
 
+  beforeEach(() => {
+    mockTriggerVoid.mockClear();
+  });
+
   it("Step 1: Agent image should be successfully saved to hard drive", async () => {
     let observeCallback: any = null;
     const sdkMocker = { ...mockSdk, registerFunction: vi.fn((config, cb) => { if (config.id === "mem::observe") observeCallback = cb; }) };
@@ -91,6 +98,12 @@ describe("End-to-End Multimodal Flow", () => {
     expect(existsSync(raw.imageData!)).toBe(true);
 
     savedImagePath = raw.imageData;
+
+    const deltaCalls = mockTriggerVoid.mock.calls.filter(
+      (c: any[]) => c[0] === "mem::disk-size-delta"
+    );
+    expect(deltaCalls.length).toBe(1);
+    expect(deltaCalls[0][1].deltaBytes).toBeGreaterThan(0);
   });
 
   it("Step 2 & 3: mem::compress should call the vision model and store compressed observation in KV", async () => {
@@ -139,9 +152,176 @@ describe("End-to-End Multimodal Flow", () => {
     expect(compressed.title).toBe("Screenshot of Red Dot");
     expect(compressed.narrative).toContain("red dot");
 
-    const stored = await kv.get<CompressedObservation>("mem:obs:test-session", raw.id!);
+    const stored = await kv.get("mem:obs:test-session", raw.id!) as CompressedObservation | null;
     expect(stored).not.toBeNull();
     expect(stored!.imageDescription).toBe("TEST_VISION_RESULT: I see a red dot");
     expect(stored!.imageRef).toBe(savedImagePath);
+  });
+});
+
+describe("Disk Size Manager", () => {
+  it("should increment disk size and trigger cleanup when over quota", async () => {
+    const localKv = mockKV() as any;
+    const localTriggerVoid = vi.fn();
+    const localSdk = { triggerVoid: localTriggerVoid } as any;
+
+    let managerCallback: any = null;
+    const sdkMocker = {
+      ...localSdk,
+      registerFunction: vi.fn((config: any, cb: any) => {
+        if (config.id === "mem::disk-size-delta") managerCallback = cb;
+      }),
+    };
+
+    const { registerDiskSizeManager } = await import("../src/functions/disk-size-manager.js");
+    registerDiskSizeManager(sdkMocker, localKv);
+
+    expect(managerCallback).not.toBeNull();
+
+    const res1 = await managerCallback({ deltaBytes: 1000 });
+    expect(res1.success).toBe(true);
+    expect(res1.currentTotal).toBe(1000);
+
+    const res2 = await managerCallback({ deltaBytes: 2000 });
+    expect(res2.success).toBe(true);
+    expect(res2.currentTotal).toBe(3000);
+
+    expect(localTriggerVoid).not.toHaveBeenCalled();
+  });
+
+  it("should trigger cleanup when total exceeds max bytes", async () => {
+    const originalEnv = process.env.AGENTMEMORY_IMAGE_STORE_MAX_BYTES;
+    process.env.AGENTMEMORY_IMAGE_STORE_MAX_BYTES = "5000";
+
+    const localKv = mockKV() as any;
+    const localTriggerVoid = vi.fn();
+    const localSdk = { triggerVoid: localTriggerVoid } as any;
+
+    let managerCallback: any = null;
+    const sdkMocker = {
+      ...localSdk,
+      registerFunction: vi.fn((config: any, cb: any) => {
+        if (config.id === "mem::disk-size-delta") managerCallback = cb;
+      }),
+    };
+
+    const { registerDiskSizeManager } = await import("../src/functions/disk-size-manager.js");
+    registerDiskSizeManager(sdkMocker, localKv);
+
+    await managerCallback({ deltaBytes: 3000 });
+    expect(localTriggerVoid).not.toHaveBeenCalled();
+
+    await managerCallback({ deltaBytes: 3000 });
+    expect(localTriggerVoid).toHaveBeenCalledWith("mem::image-quota-cleanup", {});
+
+    process.env.AGENTMEMORY_IMAGE_STORE_MAX_BYTES = originalEnv || "";
+  });
+
+  it("should clamp negative totals to zero", async () => {
+    const localKv = mockKV() as any;
+    const localSdk = { triggerVoid: vi.fn() } as any;
+
+    let managerCallback: any = null;
+    const sdkMocker = {
+      ...localSdk,
+      registerFunction: vi.fn((config: any, cb: any) => {
+        if (config.id === "mem::disk-size-delta") managerCallback = cb;
+      }),
+    };
+
+    const { registerDiskSizeManager } = await import("../src/functions/disk-size-manager.js");
+    registerDiskSizeManager(sdkMocker, localKv);
+
+    const res = await managerCallback({ deltaBytes: -99999 });
+    expect(res.currentTotal).toBe(0);
+  });
+
+  it("should reject invalid deltaBytes", async () => {
+    const localKv = mockKV() as any;
+    const localSdk = { triggerVoid: vi.fn() } as any;
+
+    let managerCallback: any = null;
+    const sdkMocker = {
+      ...localSdk,
+      registerFunction: vi.fn((config: any, cb: any) => {
+        if (config.id === "mem::disk-size-delta") managerCallback = cb;
+      }),
+    };
+
+    const { registerDiskSizeManager } = await import("../src/functions/disk-size-manager.js");
+    registerDiskSizeManager(sdkMocker, localKv);
+
+    const res = await managerCallback({ deltaBytes: "not-a-number" });
+    expect(res.success).toBe(false);
+  });
+});
+
+describe("Image Refs", () => {
+  it("should increment and decrement ref counts correctly", async () => {
+    const localKv = mockKV() as any;
+    const localTriggerVoid = vi.fn();
+    const localSdk = { triggerVoid: localTriggerVoid } as any;
+
+    const { incrementImageRef, decrementImageRef, getImageRefCount } = await import("../src/functions/image-refs.js");
+
+    await incrementImageRef(localKv, "/fake/path/test.png");
+    expect(await getImageRefCount(localKv, "/fake/path/test.png")).toBe(1);
+
+    await incrementImageRef(localKv, "/fake/path/test.png");
+    expect(await getImageRefCount(localKv, "/fake/path/test.png")).toBe(2);
+
+    await decrementImageRef(localKv, localSdk, "/fake/path/test.png");
+    expect(await getImageRefCount(localKv, "/fake/path/test.png")).toBe(1);
+  });
+});
+
+describe("Image Store", () => {
+  let testFilePath: string | undefined;
+
+  afterAll(() => {
+    if (testFilePath && existsSync(testFilePath)) {
+      rmSync(testFilePath);
+    }
+  });
+
+  it("saveImageToDisk should return filePath and bytesWritten", async () => {
+    const { saveImageToDisk } = await import("../src/utils/image-store.js");
+    const result = await saveImageToDisk(
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z/C/HgAGgwJ/lK3Q6wAAAABJRU5ErkJggg=="
+    );
+
+    expect(result.filePath).toBeDefined();
+    expect(typeof result.filePath).toBe("string");
+    expect(result.filePath.length).toBeGreaterThan(0);
+    expect(result.bytesWritten).toBeGreaterThan(0);
+    expect(existsSync(result.filePath)).toBe(true);
+
+    testFilePath = result.filePath;
+  });
+
+  it("deleteImage should return deletedBytes after successful deletion", async () => {
+    const { deleteImage } = await import("../src/utils/image-store.js");
+
+    expect(testFilePath).toBeDefined();
+    expect(existsSync(testFilePath!)).toBe(true);
+
+    const result = await deleteImage(testFilePath);
+    expect(result.deletedBytes).toBeGreaterThan(0);
+    expect(existsSync(testFilePath!)).toBe(false);
+
+    testFilePath = undefined;
+  });
+
+  it("deleteImage should return 0 for non-existent files", async () => {
+    const { deleteImage } = await import("../src/utils/image-store.js");
+    const result = await deleteImage("/non/existent/file.png");
+    expect(result.deletedBytes).toBe(0);
+  });
+
+  it("saveImageToDisk should return empty for empty input", async () => {
+    const { saveImageToDisk } = await import("../src/utils/image-store.js");
+    const result = await saveImageToDisk("");
+    expect(result.filePath).toBe("");
+    expect(result.bytesWritten).toBe(0);
   });
 });

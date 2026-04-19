@@ -137,7 +137,11 @@ export function registerObserveFunction(
 
         if (pendingImageData && (pendingImageData.startsWith("data:image/") || pendingImageData.startsWith("iVBORw0KGgo") || pendingImageData.startsWith("/9j/"))) {
           const { saveImageToDisk } = await import("../utils/image-store.js");
-          raw.imageData = saveImageToDisk(pendingImageData);
+          const { filePath, bytesWritten } = await saveImageToDisk(pendingImageData);
+          raw.imageData = filePath;
+          const { incrementImageRef } = await import("./image-refs.js");
+          await incrementImageRef(kv, filePath);
+          sdk.triggerVoid("mem::disk-size-delta", { deltaBytes: bytesWritten });
         }
 
         try {
@@ -147,7 +151,10 @@ export function registerObserveFunction(
         } catch (error) {
           if (raw.imageData) {
             const { deleteImage } = await import("../utils/image-store.js");
-            deleteImage(raw.imageData);
+            const { deletedBytes } = await deleteImage(raw.imageData);
+            if (deletedBytes > 0) {
+              sdk.triggerVoid("mem::disk-size-delta", { deltaBytes: -deletedBytes });
+            }
           }
           throw error;
         }

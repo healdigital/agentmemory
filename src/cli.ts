@@ -81,6 +81,17 @@ async function isEngineRunning(): Promise<boolean> {
   }
 }
 
+async function isAgentmemoryReady(): Promise<boolean> {
+  try {
+    const res = await fetch(`http://localhost:${getRestPort()}/agentmemory/livez`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 function findIiiConfig(): string {
   const candidates = [
     join(__dirname, "iii-config.yaml"),
@@ -616,9 +627,11 @@ async function runDemo() {
   const base = `http://localhost:${port}`;
   p.intro("agentmemory demo");
 
-  if (!(await isEngineRunning())) {
-    p.log.error(`Not running — no response on port ${port}`);
-    p.log.info("Start the server first: npx @agentmemory/agentmemory");
+  if (!(await isAgentmemoryReady())) {
+    p.log.error(
+      `agentmemory worker not reachable on port ${port} (livez probe failed). Something may be on the port but it isn't serving /agentmemory/*.`,
+    );
+    p.log.info("Start it with: npx @agentmemory/agentmemory");
     process.exit(1);
   }
 

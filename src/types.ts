@@ -182,6 +182,7 @@ export interface HealthSnapshot {
   kvConnectivity?: { status: string; latencyMs?: number; error?: string };
   status: "healthy" | "degraded" | "critical";
   alerts: string[];
+  notes?: string[];
 }
 
 export interface CircuitBreakerState {

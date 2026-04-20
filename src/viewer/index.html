@@ -1078,7 +1078,8 @@
           var heapTotal = Math.round((snap.memory.heapTotal || 0) / 1024 / 1024);
           var rss = Math.round((snap.memory.rss || 0) / 1024 / 1024);
           var heapPct = heapTotal > 0 ? Math.round((heapUsed / heapTotal) * 100) : 0;
-          var heapColor = heapPct > 80 ? 'var(--red)' : heapPct > 60 ? 'var(--yellow)' : 'var(--green)';
+          var rssAboveFloor = rss >= 512;
+          var heapColor = (heapPct > 80 && rssAboveFloor) ? 'var(--red)' : (heapPct > 60 && rssAboveFloor) ? 'var(--yellow)' : 'var(--green)';
           html += '<div class="gauge"><span class="gauge-label">Heap</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + heapPct + '%;background:' + heapColor + '"></div></div><span class="gauge-value">' + heapUsed + ' / ' + heapTotal + ' MB</span></div>';
           html += '<div class="gauge"><span class="gauge-label">RSS</span><div class="gauge-bar"><div class="gauge-fill" style="width:' + Math.min(100, Math.round(rss / 512 * 100)) + '%;background:var(--blue)"></div></div><span class="gauge-value">' + rss + ' MB</span></div>';
           if (snap.memory.external) {
@@ -1109,6 +1110,14 @@
         html += '<div class="card" style="margin-bottom:16px;border-color:var(--accent);border-width:2px;"><div class="card-title" style="color:var(--accent);border-bottom-color:var(--accent);">Alerts (' + snap.alerts.length + ')</div>';
         snap.alerts.forEach(function(al) {
           html += '<div style="font-size:12px;color:var(--accent);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(al) + '</div>';
+        });
+        html += '</div>';
+      }
+
+      if (snap.notes && snap.notes.length > 0) {
+        html += '<div class="card" style="margin-bottom:16px;"><div class="card-title" style="color:var(--ink-muted);">Notes (' + snap.notes.length + ')</div>';
+        snap.notes.forEach(function(n) {
+          html += '<div style="font-size:12px;color:var(--ink-muted);padding:4px 0;border-bottom:1px solid var(--border-light);font-family:var(--font-ui);">' + esc(n) + '</div>';
         });
         html += '</div>';
       }

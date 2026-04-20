@@ -87,6 +87,7 @@ export function registerHealthMonitor(
     const evaluated = evaluateHealth(snapshot);
     snapshot.status = evaluated.status;
     snapshot.alerts = evaluated.alerts;
+    snapshot.notes = evaluated.notes;
 
     await kv.set(KV.health, "latest", snapshot).catch(() => {});
     return snapshot;

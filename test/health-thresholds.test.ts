@@ -27,11 +27,12 @@ describe("evaluateHealth memory severity", () => {
         external: 0,
       },
     });
-    const { status, alerts } = evaluateHealth(s);
+    const { status, alerts, notes } = evaluateHealth(s);
     expect(status).toBe("healthy");
     expect(alerts.find((a) => a.startsWith("memory_critical_"))).toBeUndefined();
     expect(alerts.find((a) => a.startsWith("memory_warn_"))).toBeUndefined();
-    expect(alerts.find((a) => a.startsWith("memory_heap_tight_"))).toBeDefined();
+    expect(alerts.find((a) => a.startsWith("memory_heap_tight_"))).toBeUndefined();
+    expect(notes.find((n) => n.startsWith("memory_heap_tight_"))).toBeDefined();
   });
 
   it("goes critical when heap ratio is high AND RSS is above the floor", () => {
@@ -57,9 +58,10 @@ describe("evaluateHealth memory severity", () => {
         external: 0,
       },
     });
-    const { status, alerts } = evaluateHealth(s);
+    const { status, alerts, notes } = evaluateHealth(s);
     expect(status).toBe("healthy");
-    expect(alerts.some((a) => a.startsWith("memory_heap_tight_"))).toBe(true);
+    expect(notes.some((n) => n.startsWith("memory_heap_tight_"))).toBe(true);
+    expect(alerts.some((a) => a.startsWith("memory_heap_tight_"))).toBe(false);
     expect(alerts.some((a) => a.startsWith("memory_warn_"))).toBe(false);
     expect(alerts.some((a) => a.startsWith("memory_critical_"))).toBe(false);
   });

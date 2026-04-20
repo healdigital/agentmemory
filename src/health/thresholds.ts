@@ -23,9 +23,10 @@ const DEFAULTS: ThresholdConfig = {
 export function evaluateHealth(
   snapshot: HealthSnapshot,
   config: Partial<ThresholdConfig> = {},
-): { status: "healthy" | "degraded" | "critical"; alerts: string[] } {
+): { status: "healthy" | "degraded" | "critical"; alerts: string[]; notes: string[] } {
   const cfg = { ...DEFAULTS, ...config };
   const alerts: string[] = [];
+  const notes: string[] = [];
   let critical = false;
   let degraded = false;
 
@@ -72,9 +73,9 @@ export function evaluateHealth(
     alerts.push(`memory_warn_${Math.round(memPercent)}%_rss${memMb}mb`);
     degraded = true;
   } else if (memPercent > cfg.memoryWarnPercent) {
-    alerts.push(`memory_heap_tight_${Math.round(memPercent)}%_rss${memMb}mb`);
+    notes.push(`memory_heap_tight_${Math.round(memPercent)}%_rss${memMb}mb`);
   }
 
   const status = critical ? "critical" : degraded ? "degraded" : "healthy";
-  return { status, alerts };
+  return { status, alerts, notes };
 }

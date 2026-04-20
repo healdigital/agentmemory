@@ -235,6 +235,35 @@ describe("agentmemory integration", () => {
     });
   });
 
+  describe("dashboard list endpoints", () => {
+    it("GET /semantic returns { semantic: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/semantic"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { semantic: unknown[] };
+      expect(Array.isArray(body.semantic)).toBe(true);
+    });
+
+    it("GET /procedural returns { procedural: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/procedural"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { procedural: unknown[] };
+      expect(Array.isArray(body.procedural)).toBe(true);
+    });
+
+    it("GET /relations returns { relations: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/relations"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { relations: unknown[] };
+      expect(Array.isArray(body.relations)).toBe(true);
+    });
+  });
+
   describe("auth", () => {
     it("health endpoint is always public", async () => {
       const res = await fetch(url("/agentmemory/health"));

@@ -41,9 +41,13 @@ export function registerEventTriggers(sdk: ISdk, kv: StateKV): void {
     config: { topic: "agentmemory.observation" },
   });
 
-  sdk.registerFunction("event::session::stopped", async (data: { sessionId: string }) =>
-    sdk.trigger({ function_id: "mem::summarize", payload: data }),
-  );
+  sdk.registerFunction("event::session::stopped", async (data: { sessionId: string }) => {
+    const summary = await sdk.trigger({ function_id: "mem::summarize", payload: data });
+    if (process.env["AGENTMEMORY_REFLECT"] === "true") {
+      sdk.triggerVoid("mem::slot-reflect", { sessionId: data.sessionId });
+    }
+    return summary;
+  });
   sdk.registerTrigger({
     type: "durable:subscriber",
     function_id: "event::session::stopped",

@@ -26,6 +26,7 @@ import { registerPrivacyFunction } from "./functions/privacy.js";
 import { registerObserveFunction } from "./functions/observe.js";
 import { registerImageQuotaCleanup } from "./functions/image-quota-cleanup.js";
 import { registerVisionSearchFunctions } from "./functions/vision-search.js";
+import { registerSlotsFunctions, isSlotsEnabled, isReflectEnabled } from "./functions/slots.js";
 import { registerDiskSizeManager } from "./functions/disk-size-manager.js";
 import { registerCompressFunction } from "./functions/compress.js";
 import {
@@ -163,6 +164,9 @@ async function main() {
   registerObserveFunction(sdk, kv, dedupMap, config.maxObservationsPerSession);
   registerImageQuotaCleanup(sdk, kv);
   registerVisionSearchFunctions(sdk, kv, imageEmbeddingProvider);
+  if (isSlotsEnabled()) {
+    registerSlotsFunctions(sdk, kv);
+  }
   registerDiskSizeManager(sdk, kv);
   registerCompressFunction(sdk, kv, provider, metricsStore);
   registerSearchFunction(sdk, kv);
@@ -262,6 +266,11 @@ async function main() {
   console.log(
     `[agentmemory] Orchestration layer: actions, frontier, leases, routines, signals, checkpoints, flow-compress, mesh, branch-aware, sentinels, sketches, crystallize, diagnostics, facets`,
   );
+  if (isSlotsEnabled()) {
+    console.log(
+      `[agentmemory] Slots: enabled (pinned editable memory). Reflect on Stop hook: ${isReflectEnabled() ? "on" : "off"}`,
+    );
+  }
 
   const snapshotConfig = loadSnapshotConfig();
   if (snapshotConfig.enabled) {

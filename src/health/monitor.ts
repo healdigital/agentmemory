@@ -41,7 +41,7 @@ export function registerHealthMonitor(
       const result = await sdk.trigger<
         unknown,
         { workers?: HealthSnapshot["workers"] }
-      >("engine::workers::list", {});
+      >({ function_id: "engine::workers::list", payload: {} });
       if (result?.workers) workers = result.workers;
     } catch {}
 
@@ -87,6 +87,7 @@ export function registerHealthMonitor(
     const evaluated = evaluateHealth(snapshot);
     snapshot.status = evaluated.status;
     snapshot.alerts = evaluated.alerts;
+    snapshot.notes = evaluated.notes;
 
     await kv.set(KV.health, "latest", snapshot).catch(() => {});
     return snapshot;

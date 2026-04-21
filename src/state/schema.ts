@@ -40,8 +40,8 @@ export const KV = {
   enrichedChunks: (sessionId: string) => `mem:enriched:${sessionId}`,
   latentEmbeddings: (obsId: string) => `mem:latent:${obsId}`,
   retentionScores: "mem:retention",
+  accessLog: "mem:access",
   imageRefs: "mem:image-refs",
-  state: "mem:state",
 } as const;
 
 export const STREAM = {

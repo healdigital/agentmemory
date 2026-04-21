@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   Session,
   CompressedObservation,
@@ -9,6 +8,8 @@ import type {
 } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { recordAccessBatch } from "./access-tracker.js";
+import { logger } from "../logger.js";
 
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3);
@@ -27,13 +28,8 @@ export function registerContextFunction(
   kv: StateKV,
   tokenBudget: number,
 ): void {
-  sdk.registerFunction(
-    {
-      id: "mem::context",
-      description: "Generate context for session injection",
-    },
+  sdk.registerFunction("mem::context", 
     async (data: { sessionId: string; project: string; budget?: number }) => {
-      const ctx = getContext();
       const budget = data.budget || tokenBudget;
       const blocks: ContextBlock[] = [];
 
@@ -124,9 +120,10 @@ export function registerContextFunction(
         );
 
         if (important.length > 0) {
-          const items = important
+          const top = important
             .sort((a, b) => b.importance - a.importance)
-            .slice(0, 5)
+            .slice(0, 5);
+          const items = top
             .map((o) => `- [${o.type}] ${o.title}: ${o.narrative}`)
             .join("\n");
           const content = `## Session ${sessions[i].id.slice(0, 8)} (${sessions[i].startedAt})\n${items}`;
@@ -135,6 +132,7 @@ export function registerContextFunction(
             content,
             tokens: estimateTokens(content),
             recency: new Date(sessions[i].startedAt).getTime(),
+            sourceIds: top.map((o) => o.id),
           });
         }
       }
@@ -143,6 +141,7 @@ export function registerContextFunction(
 
       let usedTokens = 0;
       const selected: string[] = [];
+      const accessedIds: string[] = [];
       const header = `<agentmemory-context project="${escapeXmlAttr(data.project)}">`;
       const footer = `</agentmemory-context>`;
       usedTokens += estimateTokens(header) + estimateTokens(footer);
@@ -151,15 +150,22 @@ export function registerContextFunction(
         if (usedTokens + block.tokens > budget) break;
         selected.push(block.content);
         usedTokens += block.tokens;
+        if (block.sourceIds && block.sourceIds.length > 0) {
+          accessedIds.push(...block.sourceIds);
+        }
+      }
+
+      if (accessedIds.length > 0) {
+        void recordAccessBatch(kv, accessedIds);
       }
 
       if (selected.length === 0) {
-        ctx.logger.info("No context available", { project: data.project });
+        logger.info("No context available", { project: data.project });
         return { context: "", blocks: 0, tokens: 0 };
       }
 
       const result = `${header}\n${selected.join("\n\n")}\n${footer}`;
-      ctx.logger.info("Context generated", {
+      logger.info("Context generated", {
         blocks: selected.length,
         tokens: usedTokens,
       });

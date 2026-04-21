@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import type { ISdk } from "iii-sdk";
 import type { StateKV } from "../state/kv.js";
@@ -11,8 +11,20 @@ import type {
   Session,
 } from "../types.js";
 import { recordAudit } from "./audit.js";
+const DEFAULT_EXPORT_ROOT = join(homedir(), ".agentmemory");
 
-const DEFAULT_VAULT = join(homedir(), ".agentmemory", "vault");
+function getExportRoot(): string {
+  return resolve(process.env["AGENTMEMORY_EXPORT_ROOT"] || DEFAULT_EXPORT_ROOT);
+}
+
+function resolveVaultDir(vaultDir?: string): string | null {
+  const root = getExportRoot();
+  const resolved = resolve(vaultDir || join(root, "vault"));
+  if (resolved === root || resolved.startsWith(root + sep)) {
+    return resolved;
+  }
+  return null;
+}
 
 function sanitize(name: string): string {
   return name.replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 100);
@@ -185,12 +197,32 @@ export function registerObsidianExportFunction(
   sdk: ISdk,
   kv: StateKV,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::obsidian-export" },
-    async (data: { vaultDir?: string; types?: string[] }) => {
-      const vaultDir = data.vaultDir || DEFAULT_VAULT;
+  sdk.registerFunction("mem::obsidian-export",
+    async (data: { vaultDir?: string; types?: string[] } | undefined) => {
+      if (!data || typeof data !== "object") {
+        return { success: false, error: "payload is required" };
+      }
+      if (data.vaultDir !== undefined && typeof data.vaultDir !== "string") {
+        return { success: false, error: "vaultDir must be a string" };
+      }
+      if (data.types !== undefined) {
+        if (
+          !Array.isArray(data.types) ||
+          !data.types.every((t): t is string => typeof t === "string")
+        ) {
+          return { success: false, error: "types must be an array of strings" };
+        }
+      }
+
+      const vaultDir = resolveVaultDir(data.vaultDir);
+      if (!vaultDir) {
+        return {
+          success: false,
+          error: `vaultDir must be inside ${getExportRoot()}`,
+        };
+      }
       const exportTypes = new Set(
-        data.types || ["memories", "lessons", "crystals", "sessions"],
+        data.types ?? ["memories", "lessons", "crystals", "sessions"],
       );
 
       const dirs = {

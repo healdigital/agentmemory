@@ -1,8 +1,8 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type { Memory } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { logger } from "../logger.js";
 
 const MAX_CONTEXT_LENGTH = 4000;
 
@@ -16,29 +16,23 @@ function escapeXml(s: string): string {
 }
 
 export function registerEnrichFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    {
-      id: "mem::enrich",
-      description:
-        "Aggregate file context, relevant observations, and bug memories for pre-tool enrichment",
-    },
+  sdk.registerFunction("mem::enrich", 
     async (data: {
       sessionId: string;
       files: string[];
       terms?: string[];
       toolName?: string;
     }) => {
-      const ctx = getContext();
       const parts: string[] = [];
 
       const fileContextPromise = sdk
-        .trigger<{ sessionId: string; files: string[] }, { context: string }>(
-          "mem::file-context",
-          {
+        .trigger<{ sessionId: string; files: string[] }, { context: string }>({
+          function_id: "mem::file-context",
+          payload: {
             sessionId: data.sessionId,
             files: data.files,
           },
-        )
+        })
         .catch(() => ({ context: "" }));
 
       const searchQueries: string[] = [
@@ -52,9 +46,12 @@ export function registerEnrichFunction(sdk: ISdk, kv: StateKV): void {
               .trigger<
                 { query: string; limit: number },
                 { results: Array<{ observation: { narrative: string } }> }
-              >("mem::search", {
-                query: searchQueries.join(" "),
-                limit: 5,
+              >({
+                function_id: "mem::search",
+                payload: {
+                  query: searchQueries.join(" "),
+                  limit: 5,
+                },
               })
               .catch(() => ({ results: [] }))
           : Promise.resolve({ results: [] });
@@ -119,7 +116,7 @@ export function registerEnrichFunction(sdk: ISdk, kv: StateKV): void {
         truncated = true;
       }
 
-      ctx.logger.info("Enrichment completed", {
+      logger.info("Enrichment completed", {
         sessionId: data.sessionId,
         fileCount: data.files.length,
         contextLength: context.length,

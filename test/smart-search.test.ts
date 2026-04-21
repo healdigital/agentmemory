@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-vi.mock("iii-sdk", () => ({
-  getContext: () => ({
-    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-  }),
+vi.mock("../src/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 import { registerSmartSearchFunction } from "../src/functions/smart-search.js";
@@ -38,14 +36,17 @@ function mockKV() {
 function mockSdk() {
   const functions = new Map<string, Function>();
   return {
-    registerFunction: (opts: { id: string }, handler: Function) => {
-      functions.set(opts.id, handler);
+    registerFunction: (idOrOpts: string | { id: string }, handler: Function) => {
+      const id = typeof idOrOpts === "string" ? idOrOpts : idOrOpts.id;
+      functions.set(id, handler);
     },
     registerTrigger: () => {},
-    trigger: async (id: string, data: unknown) => {
+    trigger: async (idOrInput: string | { function_id: string; payload: unknown }, data?: unknown) => {
+      const id = typeof idOrInput === "string" ? idOrInput : idOrInput.function_id;
+      const payload = typeof idOrInput === "string" ? data : idOrInput.payload;
       const fn = functions.get(id);
       if (!fn) throw new Error(`No function: ${id}`);
-      return fn(data);
+      return fn(payload);
     },
   };
 }
@@ -165,5 +166,31 @@ describe("Smart Search Function", () => {
 
     expect(result.mode).toBe("expanded");
     expect(result.results.length).toBe(0);
+  });
+
+  it("compact mode records access for every returned observation id (#119)", async () => {
+    await sdk.trigger("mem::smart-search", { query: "auth" });
+    // recordAccessBatch is fire-and-forget — let the microtask queue drain.
+    await new Promise((r) => setImmediate(r));
+
+    const log1 = (await kv.get("mem:access", "obs_1")) as {
+      count: number;
+    } | null;
+    const log2 = (await kv.get("mem:access", "obs_2")) as {
+      count: number;
+    } | null;
+
+    expect(log1?.count).toBe(1);
+    expect(log2?.count).toBe(1);
+  });
+
+  it("expand mode records access for expanded observation ids (#119)", async () => {
+    await sdk.trigger("mem::smart-search", { expandIds: ["obs_1"] });
+    await new Promise((r) => setImmediate(r));
+
+    const log = (await kv.get("mem:access", "obs_1")) as {
+      count: number;
+    } | null;
+    expect(log?.count).toBe(1);
   });
 });

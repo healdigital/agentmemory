@@ -53,12 +53,15 @@ function mockKV(observations: CompressedObservation[] = []) {
 function mockSdk() {
   const functions = new Map<string, Function>();
   return {
-    registerFunction: (opts: { id: string }, fn: Function) => {
-      functions.set(opts.id, fn);
+    registerFunction: (idOrOpts: string | { id: string }, fn: Function) => {
+      const id = typeof idOrOpts === "string" ? idOrOpts : idOrOpts.id;
+      functions.set(id, fn);
     },
-    trigger: async (id: string, data: unknown) => {
+    trigger: async (idOrInput: string | { function_id: string; payload: unknown }, data?: unknown) => {
+      const id = typeof idOrInput === "string" ? idOrInput : idOrInput.function_id;
+      const payload = typeof idOrInput === "string" ? data : idOrInput.payload;
       const fn = functions.get(id);
-      if (fn) return fn(data);
+      if (fn) return fn(payload);
       return null;
     },
     triggerVoid: () => {},
@@ -73,14 +76,8 @@ function mockProvider(response: string): MemoryProvider {
   };
 }
 
-vi.mock("iii-sdk", () => ({
-  getContext: () => ({
-    logger: {
-      info: () => {},
-      warn: () => {},
-      error: () => {},
-    },
-  }),
+vi.mock("../src/logger.js", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 describe("SlidingWindow", () => {

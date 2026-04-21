@@ -1,14 +1,20 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { SnapshotMeta, Session, Memory, GraphNode } from "../types.js";
+import type {
+  SnapshotMeta,
+  Session,
+  Memory,
+  GraphNode,
+  AccessLogExport,
+} from "../types.js";
 import { KV, generateId } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
 import { recordAudit } from "./audit.js";
 import { VERSION } from "../version.js";
+import { logger } from "../logger.js";
 
 const COMMIT_HASH_RE = /^[0-9a-f]{7,40}$/i;
 
@@ -35,17 +41,19 @@ export function registerSnapshotFunction(
   kv: StateKV,
   snapshotDir: string,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::snapshot-create" },
+  sdk.registerFunction("mem::snapshot-create", 
     async (data?: { message?: string }) => {
-      const ctx = getContext();
 
       try {
         await ensureGitRepo(snapshotDir);
+        const ts = new Date().toISOString();
 
         const sessions = await kv.list<Session>(KV.sessions);
         const memories = await kv.list<Memory>(KV.memories);
         const graphNodes = await kv.list<GraphNode>(KV.graphNodes);
+        const accessLogs = await kv
+          .list<AccessLogExport>(KV.accessLog)
+          .catch(() => [] as AccessLogExport[]);
 
         const observations: Record<string, unknown[]> = {};
         for (const session of sessions) {
@@ -59,11 +67,12 @@ export function registerSnapshotFunction(
 
         const state = {
           version: VERSION,
-          timestamp: new Date().toISOString(),
+          timestamp: ts,
           sessions,
           memories,
           graphNodes,
           observations,
+          accessLogs,
         };
 
         writeFileSync(
@@ -74,7 +83,7 @@ export function registerSnapshotFunction(
 
         await gitExec(snapshotDir, ["add", "."]);
 
-        const message = data?.message || `Snapshot ${new Date().toISOString()}`;
+        const message = data?.message || `Snapshot ${ts}`;
         try {
           await gitExec(snapshotDir, ["commit", "-m", message]);
         } catch (commitErr) {
@@ -91,7 +100,7 @@ export function registerSnapshotFunction(
         const meta: SnapshotMeta = {
           id: generateId("snap"),
           commitHash,
-          createdAt: new Date().toISOString(),
+          createdAt: ts,
           message,
           stats: {
             sessions: sessions.length,
@@ -109,17 +118,17 @@ export function registerSnapshotFunction(
           stats: meta.stats,
         });
 
-        ctx.logger.info("Snapshot created", { commitHash });
+        logger.info("Snapshot created", { commitHash });
         return { success: true, snapshot: meta };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Snapshot failed", { error: msg });
+        logger.error("Snapshot failed", { error: msg });
         return { success: false, error: msg };
       }
     },
   );
 
-  sdk.registerFunction({ id: "mem::snapshot-list" }, async () => {
+  sdk.registerFunction("mem::snapshot-list",  async () => {
     try {
       if (!existsSync(join(snapshotDir, ".git"))) {
         return { snapshots: [] };
@@ -144,11 +153,9 @@ export function registerSnapshotFunction(
     }
   });
 
-  sdk.registerFunction(
-    { id: "mem::snapshot-restore" },
-    async (data: { commitHash: string }) => {
-      const ctx = getContext();
-      if (!data.commitHash) {
+  sdk.registerFunction("mem::snapshot-restore", 
+    async (data: { commitHash: string } | undefined) => {
+      if (!data || typeof data.commitHash !== "string" || !data.commitHash.trim()) {
         return { success: false, error: "commitHash is required" };
       }
       if (!COMMIT_HASH_RE.test(data.commitHash)) {
@@ -171,6 +178,7 @@ export function registerSnapshotFunction(
             string,
             Array<{ id: string } & Record<string, unknown>>
           >;
+          accessLogs?: AccessLogExport[];
         };
 
         if (state.sessions) {
@@ -195,6 +203,11 @@ export function registerSnapshotFunction(
             }
           }
         }
+        if (state.accessLogs) {
+          for (const log of state.accessLogs) {
+            await kv.set(KV.accessLog, log.memoryId, log);
+          }
+        }
 
         await gitExec(snapshotDir, ["checkout", "HEAD", "--", "state.json"]);
 
@@ -205,13 +218,13 @@ export function registerSnapshotFunction(
           graphNodes: state.graphNodes?.length || 0,
         });
 
-        ctx.logger.info("Snapshot restored", {
+        logger.info("Snapshot restored", {
           commitHash: data.commitHash,
         });
         return { success: true, commitHash: data.commitHash };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Snapshot restore failed", { error: msg });
+        logger.error("Snapshot restore failed", { error: msg });
         return { success: false, error: msg };
       }
     },

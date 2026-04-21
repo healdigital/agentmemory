@@ -226,10 +226,41 @@ describe("agentmemory integration", () => {
 
   describe("viewer", () => {
     it("serves the viewer HTML", async () => {
-      const res = await fetch(url("/agentmemory/viewer"));
+      const res = await fetch(url("/agentmemory/viewer"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
       expect(res.status).toBe(200);
       const body = await res.text();
       expect(body).toContain("html");
+    });
+  });
+
+  describe("dashboard list endpoints", () => {
+    it("GET /semantic returns { semantic: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/semantic"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { semantic: unknown[] };
+      expect(Array.isArray(body.semantic)).toBe(true);
+    });
+
+    it("GET /procedural returns { procedural: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/procedural"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { procedural: unknown[] };
+      expect(Array.isArray(body.procedural)).toBe(true);
+    });
+
+    it("GET /relations returns { relations: [...] }", async () => {
+      const res = await fetch(url("/agentmemory/relations"), {
+        headers: SECRET ? authHeaders() : undefined,
+      });
+      expect(res.status).toBe(200);
+      const body = (await json(res)) as { relations: unknown[] };
+      expect(Array.isArray(body.relations)).toBe(true);
     });
   });
 
@@ -258,6 +289,11 @@ describe("agentmemory integration", () => {
           },
           body: JSON.stringify({ query: "test" }),
         });
+        expect(res.status).toBe(401);
+      });
+
+      it("rejects unauthenticated viewer requests on the API port", async () => {
+        const res = await fetch(url("/agentmemory/viewer"));
         expect(res.status).toBe(401);
       });
     }

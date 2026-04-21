@@ -123,9 +123,11 @@ export interface ProviderConfig {
   provider: ProviderType;
   model: string;
   maxTokens: number;
+  /** Optional base URL override (e.g. for Anthropic-compatible APIs or local proxies) */
+  baseURL?: string;
 }
 
-export type ProviderType = "agent-sdk" | "anthropic" | "gemini" | "openrouter";
+export type ProviderType = "agent-sdk" | "anthropic" | "gemini" | "openrouter" | "minimax";
 
 export interface MemoryProvider {
   name: string;
@@ -156,6 +158,7 @@ export interface ContextBlock {
   content: string;
   tokens: number;
   recency: number;
+  sourceIds?: string[];
 }
 
 export interface EvalResult {
@@ -190,6 +193,7 @@ export interface HealthSnapshot {
   kvConnectivity?: { status: string; latencyMs?: number; error?: string };
   status: "healthy" | "degraded" | "critical";
   alerts: string[];
+  notes?: string[];
 }
 
 export interface CircuitBreakerState {
@@ -260,7 +264,7 @@ export interface ExportPagination {
 }
 
 export interface ExportData {
-  version: "0.3.0" | "0.4.0" | "0.5.0" | "0.6.0" | "0.6.1" | "0.7.0" | "0.7.2" | "0.7.3" | "0.7.4";
+  version: "0.3.0" | "0.4.0" | "0.5.0" | "0.6.0" | "0.6.1" | "0.7.0" | "0.7.2" | "0.7.3" | "0.7.4" | "0.7.5" | "0.7.6" | "0.7.9" | "0.8.0" | "0.8.1" | "0.8.2" | "0.8.3" | "0.8.4" | "0.8.5" | "0.8.6" | "0.8.7" | "0.8.8" | "0.8.9" | "0.8.10" | "0.8.11" | "0.8.12" | "0.8.13" | "0.9.0" | "0.9.1";
   exportedAt: string;
   sessions: Session[];
   observations: Record<string, CompressedObservation[]>;
@@ -282,7 +286,15 @@ export interface ExportData {
   facets?: Facet[];
   lessons?: Lesson[];
   insights?: Insight[];
+  accessLogs?: AccessLogExport[];
   pagination?: ExportPagination;
+}
+
+export interface AccessLogExport {
+  memoryId: string;
+  count: number;
+  lastAt: string;
+  recent: number[];
 }
 
 export interface EmbeddingConfig {
@@ -409,8 +421,12 @@ export interface ProceduralMemory {
   name: string;
   steps: string[];
   triggerCondition: string;
+  expectedOutcome?: string;
   frequency: number;
   sourceSessionIds: string[];
+  sourceObservationIds?: string[];
+  tags?: string[];
+  concepts?: string[];
   strength: number;
   createdAt: string;
   updatedAt: string;
@@ -446,39 +462,46 @@ export interface AuditEntry {
   id: string;
   timestamp: string;
   operation:
-  | "observe"
-  | "compress"
-  | "remember"
-  | "forget"
-  | "evolve"
-  | "consolidate"
-  | "share"
-  | "delete"
-  | "import"
-  | "export"
-  | "action_create"
-  | "action_update"
-  | "lease_acquire"
-  | "lease_release"
-  | "routine_run"
-  | "signal_send"
-  | "checkpoint_resolve"
-  | "mesh_sync"
-  | "sentinel_create"
-  | "sentinel_trigger"
-  | "sketch_create"
-  | "sketch_promote"
-  | "sketch_discard"
-  | "crystallize"
-  | "diagnose"
-  | "heal"
-  | "facet_tag"
-  | "lesson_save"
-  | "lesson_recall"
-  | "lesson_strengthen"
-  | "obsidian_export"
-  | "reflect"
-  | "insight_search";
+    | "observe"
+    | "compress"
+    | "remember"
+    | "forget"
+    | "evolve"
+    | "consolidate"
+    | "share"
+    | "delete"
+    | "import"
+    | "export"
+    | "action_create"
+    | "action_update"
+    | "lease_acquire"
+    | "lease_release"
+    | "routine_run"
+    | "signal_send"
+    | "checkpoint_resolve"
+    | "mesh_sync"
+    | "relation_create"
+    | "relation_update"
+    | "sentinel_create"
+    | "sentinel_trigger"
+    | "sketch_create"
+    | "sketch_promote"
+    | "retention_score"
+    | "sketch_discard"
+    | "crystallize"
+    | "diagnose"
+    | "heal"
+    | "facet_tag"
+    | "lesson_save"
+    | "lesson_recall"
+    | "lesson_strengthen"
+    | "obsidian_export"
+    | "reflect"
+    | "insight_search"
+    | "skill_extract"
+    | "core_add"
+    | "core_remove"
+    | "auto_page";
   userId?: string;
   functionId: string;
   targetIds: string[];
@@ -784,12 +807,18 @@ export interface TemporalState {
 
 export interface RetentionScore {
   memoryId: string;
+  // Which KV scope this row came from. Needed by mem::retention-evict
+  // so the delete loop routes to KV.memories or KV.semantic correctly.
+  // Missing on pre-0.8.10 rows — callers must treat `undefined` as
+  // "unknown" and probe both scopes for backwards-compat. See #124.
+  source?: "episodic" | "semantic";
   score: number;
   salience: number;
   temporalDecay: number;
   reinforcementBoost: number;
   lastAccessed: string;
   accessCount: number;
+  source?: "episodic" | "semantic";
 }
 
 export interface DecayConfig {

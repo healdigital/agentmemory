@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import { resolve } from "node:path";
 import { homedir } from "node:os";
 import { KV, generateId } from "../state/schema.js";
@@ -9,6 +8,7 @@ import type {
   CompressedObservation,
   SessionSummary,
 } from "../types.js";
+import { logger } from "../logger.js";
 
 const ALLOWED_DIRS = [resolve(homedir(), ".agentmemory")];
 
@@ -18,14 +18,9 @@ function isAllowedPath(dbPath: string): boolean {
 }
 
 export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    {
-      id: "mem::migrate",
-      description: "Import data from SQLite database",
-    },
+  sdk.registerFunction("mem::migrate", 
     async (data: { dbPath: string }) => {
-      const ctx = getContext();
-      ctx.logger.info("Migration started", { dbPath: data.dbPath });
+      logger.info("Migration started", { dbPath: data.dbPath });
 
       if (!isAllowedPath(data.dbPath)) {
         return {
@@ -51,8 +46,9 @@ export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
         return { success: false, error: `Database not found: ${data.dbPath}` };
       }
 
+      let db: any;
       try {
-        const db = Database(data.dbPath, { readonly: true });
+        db = Database(data.dbPath, { readonly: true });
         let sessionCount = 0;
         let obsCount = 0;
         let summaryCount = 0;
@@ -88,7 +84,7 @@ export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
               )
               .all() as any[];
           } catch {
-            ctx.logger.warn("No observation tables found");
+            logger.warn("No observation tables found");
           }
         }
 
@@ -117,7 +113,7 @@ export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
             .prepare("SELECT * FROM session_summaries")
             .all() as any[];
         } catch {
-          ctx.logger.warn("No summaries table found");
+          logger.warn("No summaries table found");
         }
 
         for (const row of summaries) {
@@ -136,8 +132,7 @@ export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
           summaryCount++;
         }
 
-        db.close();
-        ctx.logger.info("Migration complete", {
+        logger.info("Migration complete", {
           sessionCount,
           obsCount,
           summaryCount,
@@ -145,8 +140,12 @@ export function registerMigrateFunction(sdk: ISdk, kv: StateKV): void {
         return { success: true, sessionCount, obsCount, summaryCount };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Migration failed", { error: msg });
+        logger.error("Migration failed", { error: msg });
         return { success: false, error: "Migration failed" };
+      } finally {
+        try {
+          if (db) db.close();
+        } catch {}
       }
     },
   );

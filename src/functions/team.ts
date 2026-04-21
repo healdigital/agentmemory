@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   TeamConfig,
   TeamSharedItem,
@@ -9,6 +8,7 @@ import type {
 import { KV, generateId } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
 import { recordAudit } from "./audit.js";
+import { logger } from "../logger.js";
 
 const VALID_ITEM_TYPES = new Set(["memory", "pattern", "observation"]);
 
@@ -17,15 +17,16 @@ export function registerTeamFunction(
   kv: StateKV,
   config: TeamConfig,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::team-share" },
+  sdk.registerFunction("mem::team-share", 
     async (data: {
       itemId: string;
       itemType: "memory" | "pattern" | "observation";
       sessionId?: string;
       project?: string;
     }) => {
-      const ctx = getContext();
+      if (!data) {
+        return { success: false, error: "payload required" };
+      }
       if (!data.itemId || !data.itemType) {
         return { success: false, error: "itemId and itemType are required" };
       }
@@ -67,7 +68,7 @@ export function registerTeamFunction(
         itemType: data.itemType,
       });
 
-      ctx.logger.info("Team share", {
+      logger.info("Team share", {
         teamId: config.teamId,
         itemId: data.itemId,
       });
@@ -75,10 +76,9 @@ export function registerTeamFunction(
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::team-feed" },
+  sdk.registerFunction("mem::team-feed", 
     async (data?: { limit?: number }) => {
-      const limit = data?.limit || 20;
+      const limit = data?.limit ?? 20;
       const items = await kv.list<TeamSharedItem>(KV.teamShared(config.teamId));
 
       const filtered = items.filter((i) => i.visibility === "shared");
@@ -93,7 +93,7 @@ export function registerTeamFunction(
     },
   );
 
-  sdk.registerFunction({ id: "mem::team-profile" }, async () => {
+  sdk.registerFunction("mem::team-profile",  async () => {
     const items = await kv.list<TeamSharedItem>(KV.teamShared(config.teamId));
 
     const members = [...new Set(items.map((i) => i.sharedBy))];
@@ -142,6 +142,19 @@ export function registerTeamFunction(
     };
 
     await kv.set(KV.teamProfile(config.teamId), "profile", profile);
+    await recordAudit(
+      kv,
+      "share",
+      "mem::team-profile",
+      ["profile"],
+      {
+        teamId: config.teamId,
+        members: members.length,
+        totalSharedItems: items.length,
+      },
+      undefined,
+      config.userId,
+    );
     return profile;
   });
 }

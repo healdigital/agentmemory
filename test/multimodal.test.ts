@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, afterAll, beforeEach } from "vitest";
 import { existsSync, rmSync } from "node:fs";
 
-vi.mock("iii-sdk", () => ({
-  getContext: () => ({
-    logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-  }),
-}));
+vi.mock("iii-sdk", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("iii-sdk")>();
+  return {
+    ...actual,
+    getContext: () => ({
+      logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    }),
+  };
+});
 
 vi.mock("../src/functions/search.js", () => ({
   getSearchIndex: () => ({
@@ -14,7 +18,8 @@ vi.mock("../src/functions/search.js", () => ({
 }));
 
 const mockTriggerVoid = vi.fn();
-const mockSdk = { triggerVoid: mockTriggerVoid } as any;
+const mockTrigger = vi.fn().mockResolvedValue(undefined);
+const mockSdk = { triggerVoid: mockTriggerVoid, trigger: mockTrigger } as any;
 
 function mockKV() {
   const store = new Map<string, Map<string, unknown>>();
@@ -69,7 +74,7 @@ describe("End-to-End Multimodal Flow", () => {
 
   it("Step 1: Agent image should be successfully saved to hard drive", async () => {
     let observeCallback: any = null;
-    const sdkMocker = { ...mockSdk, registerFunction: vi.fn((config, cb) => { if (config.id === "mem::observe") observeCallback = cb; }) };
+    const sdkMocker = { ...mockSdk, registerFunction: vi.fn((id, cb) => { if (id === "mem::observe") observeCallback = cb; }) };
     registerObserveFunction(sdkMocker, kv);
 
     const fakeIncomingData = {
@@ -122,8 +127,8 @@ describe("End-to-End Multimodal Flow", () => {
     let compressCallback: any = null;
     const sdkMocker = {
       ...mockSdk,
-      registerFunction: vi.fn((config, cb) => {
-        if (config.id === "mem::compress") compressCallback = cb;
+      registerFunction: vi.fn((id, cb) => {
+        if (id === "mem::compress") compressCallback = cb;
       }),
     };
     registerCompressFunction(sdkMocker, kv, mockProvider);

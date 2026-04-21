@@ -1,11 +1,11 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Memory, ClaudeBridgeConfig } from "../types.js";
 import { KV } from "../state/schema.js";
 import type { StateKV } from "../state/kv.js";
 import { recordAudit } from "./audit.js";
+import { logger } from "../logger.js";
 
 function parseMemoryMd(content: string): {
   sections: Map<string, string>;
@@ -74,10 +74,8 @@ export function registerClaudeBridgeFunction(
   kv: StateKV,
   config: ClaudeBridgeConfig,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::claude-bridge-read" },
+  sdk.registerFunction("mem::claude-bridge-read", 
     async () => {
-      const ctx = getContext();
       if (!config.enabled || !config.memoryFilePath) {
         return { success: false, error: "Claude bridge not configured" };
       }
@@ -94,24 +92,27 @@ export function registerClaudeBridgeFunction(
           sections: Object.fromEntries(sections),
           lineCount: content.split("\n").length,
         });
+        await recordAudit(kv, "export", "mem::claude-bridge-read", ["last-read"], {
+          timestamp: new Date().toISOString(),
+          sections: Object.keys(Object.fromEntries(sections)),
+          lineCount: content.split("\n").length,
+        });
 
-        ctx.logger.info("Claude bridge: read MEMORY.md", {
+        logger.info("Claude bridge: read MEMORY.md", {
           path: config.memoryFilePath,
           lines: content.split("\n").length,
         });
         return { success: true, content, sections: Object.fromEntries(sections) };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Claude bridge read failed", { error: msg });
+        logger.error("Claude bridge read failed", { error: msg });
         return { success: false, error: msg };
       }
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::claude-bridge-sync" },
+  sdk.registerFunction("mem::claude-bridge-sync", 
     async () => {
-      const ctx = getContext();
       if (!config.enabled || !config.memoryFilePath) {
         return { success: false, error: "Claude bridge not configured" };
       }
@@ -146,14 +147,14 @@ export function registerClaudeBridgeFunction(
           lines: md.split("\n").length,
         });
 
-        ctx.logger.info("Claude bridge: synced to MEMORY.md", {
+        logger.info("Claude bridge: synced to MEMORY.md", {
           path: config.memoryFilePath,
           memories: latestMemories.length,
         });
         return { success: true, path: config.memoryFilePath, lines: md.split("\n").length };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        ctx.logger.error("Claude bridge sync failed", { error: msg });
+        logger.error("Claude bridge sync failed", { error: msg });
         return { success: false, error: msg };
       }
     },

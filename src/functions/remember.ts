@@ -1,13 +1,14 @@
-import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
+import { TriggerAction, type ISdk } from "iii-sdk";
 import type { Memory } from "../types.js";
 import { KV, generateId, jaccardSimilarity } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
 import { withKeyedLock } from "../state/keyed-mutex.js";
+import { deleteAccessLog } from "./access-tracker.js";
+import { recordAudit } from "./audit.js";
+import { logger } from "../logger.js";
 
 export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
-  sdk.registerFunction(
-    { id: "mem::remember" },
+  sdk.registerFunction("mem::remember", 
     async (data: {
       content: string;
       type?: string;
@@ -16,7 +17,6 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
       ttlDays?: number;
       sourceObservationIds?: string[];
     }) => {
-      const ctx = getContext();
       if (
         !data.content ||
         typeof data.content !== "string" ||
@@ -98,12 +98,16 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
         await kv.set(KV.memories, memory.id, memory);
 
         if (supersededId) {
-          sdk.triggerVoid("mem::cascade-update", {
-            supersededMemoryId: supersededId,
+          await sdk.trigger({
+            function_id: "mem::cascade-update",
+            payload: {
+              supersededMemoryId: supersededId,
+            },
+            action: TriggerAction.Void(),
           });
         }
 
-        ctx.logger.info("Memory saved", {
+        logger.info("Memory saved", {
           memId: memory.id,
           type: memory.type,
         });
@@ -112,18 +116,26 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
     },
   );
 
-  sdk.registerFunction(
-    { id: "mem::forget" },
+  sdk.registerFunction("mem::forget",
     async (data: {
       sessionId?: string;
       observationIds?: string[];
       memoryId?: string;
     }) => {
-      const ctx = getContext();
       let deleted = 0;
+      const deletedMemoryIds: string[] = [];
+      const deletedObservationIds: string[] = [];
+      let deletedSession = false;
+      const { decrementImageRef } = await import("./image-refs.js");
 
       if (data.memoryId) {
+        const mem = await kv.get<Memory>(KV.memories, data.memoryId);
         await kv.delete(KV.memories, data.memoryId);
+        if (mem?.imageRef) {
+          await decrementImageRef(kv, sdk, mem.imageRef);
+        }
+        await deleteAccessLog(kv, data.memoryId);
+        deletedMemoryIds.push(data.memoryId);
         deleted++;
       }
 
@@ -133,7 +145,16 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
         data.observationIds.length > 0
       ) {
         for (const obsId of data.observationIds) {
+          const obs = await kv.get<{ imageData?: string; imageRef?: string }>(
+            KV.observations(data.sessionId),
+            obsId,
+          );
           await kv.delete(KV.observations(data.sessionId), obsId);
+          if (obs?.imageData) await decrementImageRef(kv, sdk, obs.imageData);
+          if (obs?.imageRef && obs.imageRef !== obs.imageData) {
+            await decrementImageRef(kv, sdk, obs.imageRef);
+          }
+          deletedObservationIds.push(obsId);
           deleted++;
         }
       }
@@ -143,19 +164,42 @@ export function registerRememberFunction(sdk: ISdk, kv: StateKV): void {
         (!data.observationIds || data.observationIds.length === 0) &&
         !data.memoryId
       ) {
-        const observations = await kv.list<{ id: string }>(
+        const observations = await kv.list<{ id: string; imageData?: string; imageRef?: string }>(
           KV.observations(data.sessionId),
         );
         for (const obs of observations) {
           await kv.delete(KV.observations(data.sessionId), obs.id);
+          if (obs.imageData) await decrementImageRef(kv, sdk, obs.imageData);
+          if (obs.imageRef && obs.imageRef !== obs.imageData) {
+            await decrementImageRef(kv, sdk, obs.imageRef);
+          }
+          deletedObservationIds.push(obs.id);
           deleted++;
         }
         await kv.delete(KV.sessions, data.sessionId);
         await kv.delete(KV.summaries, data.sessionId);
+        deletedSession = true;
         deleted += 2;
       }
 
-      ctx.logger.info("Memory forgotten", { deleted });
+      if (deleted > 0) {
+        await recordAudit(
+          kv,
+          "forget",
+          "mem::forget",
+          [...deletedMemoryIds, ...deletedObservationIds],
+          {
+            sessionId: data.sessionId,
+            deleted,
+            memoriesDeleted: deletedMemoryIds.length,
+            observationsDeleted: deletedObservationIds.length,
+            sessionDeleted: deletedSession,
+            reason: "user-initiated forget",
+          },
+        );
+      }
+
+      logger.info("Memory forgotten", { deleted });
       return { success: true, deleted };
     },
   );

@@ -1,5 +1,4 @@
 import type { ISdk } from "iii-sdk";
-import { getContext } from "iii-sdk";
 import type {
   SemanticMemory,
   ProceduralMemory,
@@ -17,6 +16,7 @@ import {
 } from "../prompts/consolidation.js";
 import { recordAudit } from "./audit.js";
 import { getConsolidationDecayDays, isConsolidationEnabled } from "../config.js";
+import { logger } from "../logger.js";
 
 function applyDecay(
   items: Array<{
@@ -47,13 +47,11 @@ export function registerConsolidationPipelineFunction(
   kv: StateKV,
   provider: MemoryProvider,
 ): void {
-  sdk.registerFunction(
-    { id: "mem::consolidate-pipeline" },
+  sdk.registerFunction("mem::consolidate-pipeline", 
     async (data?: { tier?: string; force?: boolean; project?: string }) => {
       if (!data?.force && !isConsolidationEnabled()) {
         return { success: false, skipped: true, reason: "CONSOLIDATION_ENABLED is not set to true" };
       }
-      const ctx = getContext();
       const tier = data?.tier || "all";
       const decayDays = getConsolidationDecayDays();
       const results: Record<string, unknown> = {};
@@ -124,7 +122,7 @@ export function registerConsolidationPipelineFunction(
             results.semantic = { newFacts, totalSummaries: summaries.length };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            ctx.logger.error("Semantic consolidation failed", { error: msg });
+            logger.error("Semantic consolidation failed", { error: msg });
             results.semantic = { error: msg };
           }
         } else {
@@ -137,14 +135,14 @@ export function registerConsolidationPipelineFunction(
 
       if (tier === "all" || tier === "reflect") {
         try {
-          const reflectResult = await sdk.trigger("mem::reflect", {
+          const reflectResult = await sdk.trigger({ function_id: "mem::reflect", payload: {
             maxClusters: 10,
             project: data?.project,
-          });
+          } });
           results.reflect = reflectResult;
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          ctx.logger.warn("Reflect tier failed", { error: msg });
+          logger.warn("Reflect tier failed", { error: msg });
           results.reflect = { error: msg };
         }
       }
@@ -219,7 +217,7 @@ export function registerConsolidationPipelineFunction(
             };
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            ctx.logger.error("Procedural extraction failed", { error: msg });
+            logger.error("Procedural extraction failed", { error: msg });
             results.procedural = { error: msg };
           }
         } else {
@@ -251,11 +249,11 @@ export function registerConsolidationPipelineFunction(
 
       if (process.env["OBSIDIAN_AUTO_EXPORT"] === "true") {
         try {
-          await sdk.trigger("mem::obsidian-export", {});
+          await sdk.trigger({ function_id: "mem::obsidian-export", payload: {} });
           results.obsidianExport = { success: true };
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          ctx.logger.warn("Obsidian auto-export failed", { error: msg });
+          logger.warn("Obsidian auto-export failed", { error: msg });
           results.obsidianExport = { success: false, error: msg };
         }
       }
@@ -265,7 +263,7 @@ export function registerConsolidationPipelineFunction(
         results,
       });
 
-      ctx.logger.info("Consolidation pipeline complete", { tier, results });
+      logger.info("Consolidation pipeline complete", { tier, results });
       return { success: true, results };
     },
   );

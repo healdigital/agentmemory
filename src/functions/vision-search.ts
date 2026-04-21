@@ -2,6 +2,7 @@ import type { ISdk } from "iii-sdk";
 import type { EmbeddingProvider } from "../types.js";
 import { KV } from "../state/schema.js";
 import { StateKV } from "../state/kv.js";
+import { isManagedImagePath } from "../utils/image-store.js";
 import { recordAudit } from "./audit.js";
 import { logger } from "../logger.js";
 
@@ -32,6 +33,13 @@ export function registerVisionSearchFunctions(
       }
       if (!data?.imageRef || typeof data.imageRef !== "string") {
         return { success: false, error: "imageRef required" };
+      }
+      if (!isManagedImagePath(data.imageRef)) {
+        return { success: false, error: "imageRef must point to a file under the managed image store" };
+      }
+      const refCount = await kv.get<number>(KV.imageRefs, data.imageRef);
+      if (!refCount || Number(refCount) < 1) {
+        return { success: false, error: "imageRef not registered in mem:image-refs" };
       }
       try {
         const vec = await imageProvider.embedImage(data.imageRef);
@@ -72,7 +80,11 @@ export function registerVisionSearchFunctions(
       if (!imageProvider?.embedImage) {
         return { success: false, error: "image embeddings disabled (set AGENTMEMORY_IMAGE_EMBEDDINGS=true)" };
       }
-      const topK = Math.min(50, Math.max(1, data?.topK ?? 10));
+      const requestedTopK =
+        typeof data?.topK === "number" && Number.isFinite(data.topK)
+          ? Math.trunc(data.topK)
+          : 10;
+      const topK = Math.min(50, Math.max(1, requestedTopK));
 
       let queryVec: Float32Array | null = null;
       try {
@@ -84,6 +96,13 @@ export function registerVisionSearchFunctions(
             : `data:image/png;base64,${data.queryImageBase64}`;
           queryVec = await imageProvider.embedImage(b64);
         } else if (data?.queryImageRef) {
+          if (!isManagedImagePath(data.queryImageRef)) {
+            return { success: false, error: "queryImageRef must point to a file under the managed image store" };
+          }
+          const refCount = await kv.get<number>(KV.imageRefs, data.queryImageRef);
+          if (!refCount || Number(refCount) < 1) {
+            return { success: false, error: "queryImageRef not registered in mem:image-refs" };
+          }
           queryVec = await imageProvider.embedImage(data.queryImageRef);
         } else {
           return { success: false, error: "queryText, queryImageRef, or queryImageBase64 required" };

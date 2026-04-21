@@ -126,34 +126,54 @@ describe("slots — primitive", () => {
   });
 
   it("project slot shadows global slot of the same label", async () => {
-    await kv.set(KV.globalSlots, "persona", {
-      label: "persona",
-      content: "global-persona",
-      sizeLimit: 1000,
-      description: "",
-      pinned: true,
-      readOnly: false,
-      scope: "global",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-    await kv.set(KV.slots, "persona", {
+    // Default seed already created a global `persona`. Populate it through
+    // the public handler, then create a project-scoped override through the
+    // same handler so scope validation + shadowing logic is exercised end
+    // to end (no direct kv.set).
+    await handlers["mem::slot-replace"]({ label: "persona", content: "global-persona" });
+    const createRes = (await handlers["mem::slot-create"]({
       label: "persona",
       content: "project-override",
-      sizeLimit: 1000,
-      description: "",
-      pinned: true,
-      readOnly: false,
       scope: "project",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
+    })) as { success: boolean };
+    expect(createRes.success).toBe(true);
+
     const res = (await handlers["mem::slot-get"]({ label: "persona" })) as {
       slot: { content: string };
       scope: string;
     };
     expect(res.slot.content).toBe("project-override");
     expect(res.scope).toBe("project");
+  });
+
+  it("rejects invalid sizeLimit instead of silently defaulting", async () => {
+    const tooBig = (await handlers["mem::slot-create"]({
+      label: "oversize",
+      sizeLimit: 99999,
+    })) as { success: boolean; error: string };
+    expect(tooBig.success).toBe(false);
+    expect(tooBig.error).toMatch(/sizeLimit must be/);
+
+    const negative = (await handlers["mem::slot-create"]({
+      label: "negative",
+      sizeLimit: -1,
+    })) as { success: boolean; error: string };
+    expect(negative.success).toBe(false);
+
+    const nonInteger = (await handlers["mem::slot-create"]({
+      label: "fractional",
+      sizeLimit: 1.5,
+    })) as { success: boolean; error: string };
+    expect(nonInteger.success).toBe(false);
+  });
+
+  it("rejects unknown scope values", async () => {
+    const res = (await handlers["mem::slot-create"]({
+      label: "bad_scope",
+      scope: "wrong" as unknown as "project",
+    })) as { success: boolean; error: string };
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/scope must be/);
   });
 
   it("listPinnedSlots returns only pinned slots with content", async () => {

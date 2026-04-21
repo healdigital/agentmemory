@@ -341,7 +341,7 @@ Install agentmemory: run `npx @agentmemory/agentmemory` in a separate terminal t
 <summary><b>OpenClaw (paste this prompt)</b></summary>
 
 ```
-Install agentmemory for OpenClaw. Run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server on localhost:3111. Then add this to my OpenClaw MCP config so agentmemory is available with all 43 memory tools:
+Install agentmemory for OpenClaw. Run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server on localhost:3111. Then add this to my OpenClaw MCP config so agentmemory is available with all 50 memory tools:
 
 {
   "mcpServers": {
@@ -363,7 +363,7 @@ Full guide: [`integrations/openclaw/`](integrations/openclaw/)
 <summary><b>Hermes Agent (paste this prompt)</b></summary>
 
 ```
-Install agentmemory for Hermes. Run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server on localhost:3111. Then add this to ~/.hermes/config.yaml so Hermes can use agentmemory as an MCP server with all 43 memory tools:
+Install agentmemory for Hermes. Run `npx @agentmemory/agentmemory` in a separate terminal to start the memory server on localhost:3111. Then add this to ~/.hermes/config.yaml so Hermes can use agentmemory as an MCP server with all 50 memory tools:
 
 mcp_servers:
   agentmemory:
@@ -595,7 +595,7 @@ npm install @xenova/transformers
 
 50 tools, 6 resources, 3 prompts, and 4 skills — the most comprehensive MCP memory toolkit for any agent.
 
-### 44 Tools
+### 50 Tools
 
 <details>
 <summary>Core tools (always available)</summary>
@@ -617,7 +617,7 @@ npm install @xenova/transformers
 </details>
 
 <details>
-<summary>Extended tools (44 total — set AGENTMEMORY_TOOLS=all)</summary>
+<summary>Extended tools (50 total — set AGENTMEMORY_TOOLS=all)</summary>
 
 | Tool | Description |
 |------|-------------|
@@ -901,7 +901,7 @@ Full endpoint list: [`src/triggers/api.ts`](src/triggers/api.ts)
 
 Built on [iii-engine](https://iii.dev)'s three primitives — no Express, no Postgres, no Redis.
 
-**118 source files · ~21,800 LOC · 646 tests · 123 functions · 34 KV scopes**
+**118 source files · ~21,800 LOC · 800 tests · 123 functions · 34 KV scopes**
 
 <details>
 <summary>What iii-engine replaces</summary>
@@ -921,7 +921,7 @@ Built on [iii-engine](https://iii.dev)'s three primitives — no Express, no Pos
 ```bash
 npm run dev               # Hot reload
 npm run build             # Production build
-npm test                  # 646 tests (~1.7s)
+npm test                  # 800 tests (~1.7s)
 npm run test:integration  # API tests (requires running services)
 ```
 

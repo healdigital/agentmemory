@@ -130,15 +130,37 @@ async function readSlot(
   return { slot: null, scope: "project" };
 }
 
+async function readSlotInScope(
+  kv: StateKV,
+  label: string,
+  scope: SlotScope,
+): Promise<MemorySlot | null> {
+  return kv.get<MemorySlot>(scopeKv(scope), label);
+}
+
+function validateScope(raw: unknown): SlotScope | null {
+  if (raw === undefined || raw === null) return "project";
+  if (raw === "project" || raw === "global") return raw;
+  return null;
+}
+
+function validateSizeLimit(raw: unknown): number | null | undefined {
+  if (raw === undefined || raw === null) return DEFAULT_SIZE_LIMIT;
+  if (typeof raw !== "number") return null;
+  if (!Number.isInteger(raw) || raw < 1 || raw > 20000) return null;
+  return raw;
+}
+
 async function seedDefaults(kv: StateKV): Promise<void> {
+  const ts = nowIso();
   for (const tmpl of DEFAULT_SLOTS) {
     const target = scopeKv(tmpl.scope);
     const existing = await kv.get<MemorySlot>(target, tmpl.label);
     if (existing) continue;
     const slot: MemorySlot = {
       ...tmpl,
-      createdAt: nowIso(),
-      updatedAt: nowIso(),
+      createdAt: ts,
+      updatedAt: ts,
     };
     await kv.set(target, tmpl.label, slot);
   }
@@ -212,36 +234,43 @@ export function registerSlotsFunctions(sdk: ISdk, kv: StateKV): void {
     }) => {
       const label = validateLabel(data?.label);
       if (!label) return { success: false, error: "label required (lowercase, starts with letter, [a-z0-9_])" };
-      const { slot: existing } = await readSlot(kv, label);
-      if (existing) return { success: false, error: "slot already exists" };
-      const scope: SlotScope = data?.scope === "global" ? "global" : "project";
-      const sizeLimit =
-        typeof data?.sizeLimit === "number" && Number.isInteger(data.sizeLimit) && data.sizeLimit > 0 && data.sizeLimit <= 20000
-          ? data.sizeLimit
-          : DEFAULT_SIZE_LIMIT;
+      const scope = validateScope(data?.scope);
+      if (!scope) return { success: false, error: "scope must be 'project' or 'global'" };
+      const sizeLimit = validateSizeLimit(data?.sizeLimit);
+      if (sizeLimit === null) {
+        return { success: false, error: "sizeLimit must be an integer between 1 and 20000" };
+      }
       const content = typeof data?.content === "string" ? data.content : "";
       if (content.length > sizeLimit) {
         return { success: false, error: `content exceeds sizeLimit (${content.length} > ${sizeLimit})` };
       }
       const description = typeof data?.description === "string" ? data.description : "";
-      const slot: MemorySlot = {
-        label,
-        content,
-        sizeLimit,
-        description,
-        pinned: data?.pinned !== false,
-        readOnly: false,
-        scope,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-      await kv.set(scopeKv(scope), label, slot);
-      await recordAudit(kv, "slot_create", "mem::slot-create", [label], {
-        scope,
-        sizeLimit,
-        pinned: slot.pinned,
+      const pinned = typeof data?.pinned === "boolean" ? data.pinned : true;
+      return withKeyedLock(`slot:${label}`, async () => {
+        // Duplicate check is scope-local so a project slot can shadow a
+        // global slot with the same label — matches the read precedence.
+        const existing = await readSlotInScope(kv, label, scope);
+        if (existing) return { success: false, error: `slot already exists in ${scope} scope` };
+        const ts = nowIso();
+        const slot: MemorySlot = {
+          label,
+          content,
+          sizeLimit: sizeLimit as number,
+          description,
+          pinned,
+          readOnly: false,
+          scope,
+          createdAt: ts,
+          updatedAt: ts,
+        };
+        await kv.set(scopeKv(scope), label, slot);
+        await recordAudit(kv, "slot_create", "mem::slot-create", [label], {
+          scope,
+          sizeLimit: slot.sizeLimit,
+          pinned: slot.pinned,
+        });
+        return { success: true, slot };
       });
-      return { success: true, slot };
     },
   );
 
@@ -312,15 +341,17 @@ export function registerSlotsFunctions(sdk: ISdk, kv: StateKV): void {
     async (data: { label?: string }) => {
       const label = validateLabel(data?.label);
       if (!label) return { success: false, error: "label required" };
-      const { slot, scope } = await readSlot(kv, label);
-      if (!slot) return { success: false, error: "slot not found" };
-      if (slot.readOnly) return { success: false, error: "slot is read-only" };
-      await kv.delete(scopeKv(scope), label);
-      await recordAudit(kv, "slot_delete", "mem::slot-delete", [label], {
-        scope,
-        size: slot.content.length,
+      return withKeyedLock(`slot:${label}`, async () => {
+        const { slot, scope } = await readSlot(kv, label);
+        if (!slot) return { success: false, error: "slot not found" };
+        if (slot.readOnly) return { success: false, error: "slot is read-only" };
+        await kv.delete(scopeKv(scope), label);
+        await recordAudit(kv, "slot_delete", "mem::slot-delete", [label], {
+          scope,
+          size: slot.content.length,
+        });
+        return { success: true };
       });
-      return { success: true };
     },
   );
 
@@ -368,30 +399,31 @@ export function registerSlotsFunctions(sdk: ISdk, kv: StateKV): void {
       let applied = 0;
 
       if (pendingLines.length > 0) {
-        const { slot, scope } = await readSlot(kv, "pending_items");
-        if (slot) {
-          await withKeyedLock(`slot:pending_items`, async () => {
-            const already = new Set(slot.content.split("\n"));
-            const fresh = pendingLines.filter((line) => !already.has(line));
-            if (fresh.length === 0) return;
-            const sep = slot.content && !slot.content.endsWith("\n") ? "\n" : "";
-            const next = `${slot.content}${sep}${fresh.join("\n")}`;
-            const truncated = next.length > slot.sizeLimit
-              ? next.slice(next.length - slot.sizeLimit)
-              : next;
-            await kv.set(scopeKv(scope), "pending_items", {
-              ...slot,
-              content: truncated,
-              updatedAt: nowIso(),
-            });
-            applied++;
+        const pendingApplied = await withKeyedLock(`slot:pending_items`, async () => {
+          const { slot, scope } = await readSlot(kv, "pending_items");
+          if (!slot) return false;
+          const already = new Set(slot.content.split("\n"));
+          const fresh = pendingLines.filter((line) => !already.has(line));
+          if (fresh.length === 0) return false;
+          const sep = slot.content && !slot.content.endsWith("\n") ? "\n" : "";
+          const next = `${slot.content}${sep}${fresh.join("\n")}`;
+          const truncated = next.length > slot.sizeLimit
+            ? next.slice(next.length - slot.sizeLimit)
+            : next;
+          await kv.set(scopeKv(scope), "pending_items", {
+            ...slot,
+            content: truncated,
+            updatedAt: nowIso(),
           });
-        }
+          return true;
+        });
+        if (pendingApplied) applied++;
       }
 
       if (patternCounts.size > 0) {
-        const { slot, scope } = await readSlot(kv, "session_patterns");
-        if (slot) {
+        const patternsApplied = await withKeyedLock(`slot:session_patterns`, async () => {
+          const { slot, scope } = await readSlot(kv, "session_patterns");
+          if (!slot) return false;
           const summary = [
             `last reflection: ${nowIso()}`,
             ...Array.from(patternCounts.entries()).map(
@@ -405,37 +437,38 @@ export function registerSlotsFunctions(sdk: ISdk, kv: StateKV): void {
             content: next,
             updatedAt: nowIso(),
           });
-          applied++;
-        }
+          return true;
+        });
+        if (patternsApplied) applied++;
       }
 
       if (files.size > 0) {
-        const { slot, scope } = await readSlot(kv, "project_context");
-        if (slot) {
-          await withKeyedLock(`slot:project_context`, async () => {
-            const already = slot.content;
-            const fresh = Array.from(files)
-              .filter((f) => !already.includes(f))
-              .slice(0, 20);
-            if (fresh.length === 0) return;
-            const header =
-              already.length === 0 ? "Files touched in recent sessions:" : "";
-            const sep = already && !already.endsWith("\n") ? "\n" : "";
-            const nextRaw = `${already}${sep}${header ? header + "\n" : ""}${fresh
-              .map((f) => `- ${f}`)
-              .join("\n")}`;
-            const next =
-              nextRaw.length > slot.sizeLimit
-                ? nextRaw.slice(nextRaw.length - slot.sizeLimit)
-                : nextRaw;
-            await kv.set(scopeKv(scope), "project_context", {
-              ...slot,
-              content: next,
-              updatedAt: nowIso(),
-            });
-            applied++;
+        const ctxApplied = await withKeyedLock(`slot:project_context`, async () => {
+          const { slot, scope } = await readSlot(kv, "project_context");
+          if (!slot) return false;
+          const already = slot.content;
+          const fresh = Array.from(files)
+            .filter((f) => !already.includes(f))
+            .slice(0, 20);
+          if (fresh.length === 0) return false;
+          const header =
+            already.length === 0 ? "Files touched in recent sessions:" : "";
+          const sep = already && !already.endsWith("\n") ? "\n" : "";
+          const nextRaw = `${already}${sep}${header ? header + "\n" : ""}${fresh
+            .map((f) => `- ${f}`)
+            .join("\n")}`;
+          const next =
+            nextRaw.length > slot.sizeLimit
+              ? nextRaw.slice(nextRaw.length - slot.sizeLimit)
+              : nextRaw;
+          await kv.set(scopeKv(scope), "project_context", {
+            ...slot,
+            content: next,
+            updatedAt: nowIso(),
           });
-        }
+          return true;
+        });
+        if (ctxApplied) applied++;
       }
 
       if (applied > 0) {

@@ -1381,17 +1381,36 @@ export function registerApiTriggers(
     const body = (req.body ?? {}) as Record<string, unknown>;
     const label = asNonEmptyString(body["label"]);
     if (!label) return { status_code: 400, body: { error: "label required" } };
-    const payload: Record<string, unknown> = { label };
-    const content = body["content"];
-    if (typeof content === "string") payload["content"] = content;
-    const description = asNonEmptyString(body["description"]);
-    if (description) payload["description"] = description;
+    // Reject malformed inputs instead of silently dropping them.
+    if (body["content"] !== undefined && typeof body["content"] !== "string") {
+      return { status_code: 400, body: { error: "content must be a string" } };
+    }
+    if (body["description"] !== undefined && typeof body["description"] !== "string") {
+      return { status_code: 400, body: { error: "description must be a string" } };
+    }
+    if (body["pinned"] !== undefined && typeof body["pinned"] !== "boolean") {
+      return { status_code: 400, body: { error: "pinned must be a boolean" } };
+    }
+    if (
+      body["scope"] !== undefined &&
+      body["scope"] !== "project" &&
+      body["scope"] !== "global"
+    ) {
+      return { status_code: 400, body: { error: "scope must be 'project' or 'global'" } };
+    }
     const sizeLimit = parseOptionalPositiveInt(body["sizeLimit"]);
-    if (sizeLimit === null) return { status_code: 400, body: { error: "sizeLimit must be a positive integer" } };
+    if (sizeLimit === null) {
+      return { status_code: 400, body: { error: "sizeLimit must be a positive integer" } };
+    }
+    if (sizeLimit !== undefined && sizeLimit > 20000) {
+      return { status_code: 400, body: { error: "sizeLimit must be <= 20000" } };
+    }
+    const payload: Record<string, unknown> = { label };
+    if (typeof body["content"] === "string") payload["content"] = body["content"];
+    if (typeof body["description"] === "string") payload["description"] = body["description"];
     if (sizeLimit !== undefined) payload["sizeLimit"] = sizeLimit;
     if (typeof body["pinned"] === "boolean") payload["pinned"] = body["pinned"];
-    const scope = body["scope"];
-    if (scope === "project" || scope === "global") payload["scope"] = scope;
+    if (body["scope"] === "project" || body["scope"] === "global") payload["scope"] = body["scope"];
     const result = await sdk.trigger({ function_id: "mem::slot-create", payload });
     const resp = result as { success?: boolean; error?: string };
     if (resp?.success === false) {

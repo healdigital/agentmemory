@@ -1159,8 +1159,11 @@ export function registerMcpEndpoints(
             if (typeof args.content === "string") payload.content = args.content;
             if (typeof args.description === "string") payload.description = args.description;
             if (typeof args.sizeLimit === "number") payload.sizeLimit = args.sizeLimit;
-            if (args.pinned === "false") payload.pinned = false;
-            if (args.scope === "global") payload.scope = "global";
+            // Accept boolean and string-boolean forms; MCP clients bind either
+            // depending on their JSON schema wrapper.
+            if (args.pinned === false || args.pinned === "false") payload.pinned = false;
+            else if (args.pinned === true || args.pinned === "true") payload.pinned = true;
+            if (args.scope === "global" || args.scope === "project") payload.scope = args.scope;
             const result = await sdk.trigger({ function_id: "mem::slot-create", payload });
             return {
               status_code: 200,

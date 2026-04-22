@@ -281,12 +281,31 @@ const VALID_PROVIDERS = new Set([
 export function loadFallbackConfig(): FallbackConfig {
   const env = getMergedEnv();
   const raw = env["FALLBACK_PROVIDERS"] || "";
+  const allowAgentSdk = env["AGENTMEMORY_ALLOW_AGENT_SDK"] === "true";
   const providers = raw
     .split(",")
     .map((p) => p.trim())
     .filter(
       (p): p is FallbackConfig["providers"][number] =>
         Boolean(p) && VALID_PROVIDERS.has(p),
-    );
+    )
+    .filter((p) => {
+      // Honor the same safety gate as detectProvider: agent-sdk is only
+      // permitted as a fallback target when the user has explicitly opted
+      // in. Without this filter, a user could set FALLBACK_PROVIDERS=agent-sdk
+      // and re-introduce the Stop-hook recursion loop even though
+      // detectProvider() returned the noop provider.
+      if (p === "agent-sdk" && !allowAgentSdk) {
+        process.stderr.write(
+          "[agentmemory] Ignoring FALLBACK_PROVIDERS entry 'agent-sdk' " +
+            "(AGENTMEMORY_ALLOW_AGENT_SDK is not 'true'). The agent-sdk " +
+            "fallback can spawn Claude Agent SDK child sessions that trigger " +
+            "the Stop-hook recursion loop (#149 follow-up). Opt in explicitly " +
+            "with AGENTMEMORY_ALLOW_AGENT_SDK=true if this is intentional.\n",
+        );
+        return false;
+      }
+      return true;
+    });
   return { providers };
 }

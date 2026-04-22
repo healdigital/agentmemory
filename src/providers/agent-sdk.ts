@@ -22,26 +22,38 @@ export class AgentSDKProvider implements MemoryProvider {
 
     // Mark any child process / SDK session spawned from here as a SDK
     // child. agentmemory hook scripts check this marker and skip their
-    // REST calls to break the recursion loop.
+    // REST calls to break the recursion loop. Restore the previous value
+    // in `finally` so later calls in the same parent process are not
+    // mis-classified as SDK children (otherwise every subsequent query
+    // would short-circuit to "" above).
+    const prev = process.env.AGENTMEMORY_SDK_CHILD
     process.env.AGENTMEMORY_SDK_CHILD = "1"
 
-    const { query } = await import('@anthropic-ai/claude-agent-sdk')
+    try {
+      const { query } = await import('@anthropic-ai/claude-agent-sdk')
 
-    const messages = query({
-      prompt: userPrompt,
-      options: {
-        systemPrompt,
-        maxTurns: 1,
-        allowedTools: [],
-      },
-    })
+      const messages = query({
+        prompt: userPrompt,
+        options: {
+          systemPrompt,
+          maxTurns: 1,
+          allowedTools: [],
+        },
+      })
 
-    let result = ''
-    for await (const msg of messages) {
-      if (msg.type === 'result') {
-        result = (msg as any).result ?? ''
+      let result = ''
+      for await (const msg of messages) {
+        if (msg.type === 'result') {
+          result = (msg as any).result ?? ''
+        }
+      }
+      return result
+    } finally {
+      if (prev === undefined) {
+        delete process.env.AGENTMEMORY_SDK_CHILD
+      } else {
+        process.env.AGENTMEMORY_SDK_CHILD = prev
       }
     }
-    return result
   }
 }

@@ -25,7 +25,11 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - run: npm ci --legacy-peer-deps
+      # Two-step install: generate a lockfile in-runner with
+      # --package-lock-only, then install from it with `npm ci`.
+      # Lockfiles are gitignored at the repo level.
+      - run: npm install --package-lock-only --legacy-peer-deps --no-audit --no-fund
+      - run: npm ci --legacy-peer-deps --no-audit --no-fund
       - run: npm run build
       - run: npm test
 

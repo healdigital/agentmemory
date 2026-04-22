@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 
-import { isSdkChildContext } from "./sdk-guard.js";
+function isSdkChildContext(payload: unknown): boolean {
+  if (process.env["AGENTMEMORY_SDK_CHILD"] === "1") return true;
+  if (!payload || typeof payload !== "object") return false;
+  return (payload as { entrypoint?: unknown }).entrypoint === "sdk-ts";
+}
 
 // Session-start hook.
 //

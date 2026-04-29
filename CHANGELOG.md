@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`mem::graph-extract` now auto-fires at session end.** When `GRAPH_EXTRACTION_ENABLED=true`, the function was registered and the REST endpoint was live, but no internal caller invoked it — the graph KV stayed empty unless users manually `POST`ed to `/agentmemory/graph/extract`. `event::session::stopped` now triggers it (fire-and-forget, idempotent via existing node/edge merge keys), so enabling the flag actually populates the graph. README pipeline diagram updated to show graph extraction at the Stop/SessionEnd phase rather than implying it runs per PostToolUse. (#210)
+
 ## [0.9.3] — 2026-04-24
 
 Developer-experience patch. Every disabled feature flag is now visible in the viewer, the CLI, and REST error responses, so devs no longer hit empty tabs wondering whether the install is broken or just opt-in. Adds a `doctor` command that diagnoses the whole stack in one shot and a first-run hero in the viewer that points at the magical-moment `demo` command.

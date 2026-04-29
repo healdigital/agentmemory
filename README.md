@@ -506,7 +506,12 @@ PostToolUse hook fires
   -> Store raw observation
   -> LLM compress -> structured facts + concepts + narrative
   -> Vector embedding (6 providers + local)
-  -> Index in BM25 + vector + knowledge graph
+  -> Index in BM25 + vector
+
+Stop / SessionEnd hook fires
+  -> Summarize session
+  -> Knowledge graph extraction (if GRAPH_EXTRACTION_ENABLED=true)
+  -> Slot reflection (if SLOT_REFLECT_ENABLED=true)
 
 SessionStart hook fires
   -> Load project profile (top concepts, files, patterns)

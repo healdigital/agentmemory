@@ -743,9 +743,9 @@ Watch a `memory_smart_search` fire and see the BM25 scan → embedding lookup �
 agentmemory ships this for free because every function, trigger, state scope, and stream is an iii primitive — nothing custom, nothing to instrument.
 
 <p align="center">
-  <img src="assets/iii-console/dashboard.png" alt="iii console dashboard — system counters, application flow, registered triggers, live WebSocket status" width="720" />
+  <img src="assets/iii-console/workers.png" alt="iii console Workers page — connected workers including agentmemory instances with live function counts and runtime metadata" width="720" />
   <br/>
-  <em>Dashboard: functions, triggers, workers, streams, live flow graph. Screenshot from <a href="https://iii.dev/docs/console">iii.dev/docs/console</a>.</em>
+  <em>Workers page: every connected worker — including agentmemory itself — with PID, function count, runtime, and last-seen.</em>
 </p>
 
 **Already installed.** The console ships with `iii` — no separate installer.

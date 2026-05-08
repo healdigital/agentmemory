@@ -794,7 +794,7 @@ If you want to export to Jaeger/Honeycomb/Grafana Tempo instead, change `exporte
 
 agentmemory is **already a running [iii](https://iii.dev) instance**. Functions, triggers, KV state, streams, OTEL traces — all of it is iii primitives. You didn't install Postgres, Redis, Express, pm2, or Prometheus, because iii replaces them.
 
-That means one more command extends agentmemory with an entire new capability — no rewrite, no glue, no new server.
+That means one more command extends agentmemory with an entire new capability.
 
 ### Extend agentmemory with one command
 
@@ -808,7 +808,7 @@ iii worker add iii-database        # swap in a SQL-backed state adapter
 iii worker add mcp                 # generic MCP host alongside the agentmemory MCP
 ```
 
-Each `iii worker add` registers new functions and triggers into the same engine agentmemory is already running on. The viewer and console pick them up immediately — no reload, no glue code, no new container.
+Each `iii worker add` registers new functions and triggers into the same engine agentmemory is already running on. The viewer and console pick them up immediately — no reload, no new integration, no new container.
 
 | `iii worker add` | What you get on top of agentmemory |
 |---|---|

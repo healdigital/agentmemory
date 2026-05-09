@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.9.5] — 2026-05-09
 
-Bug-fix patch focused on **search recall correctness** and **plugin compatibility**. Pins `iii-engine` to v0.11.2 because v0.11.6 ships a regression that breaks the agentmemory worker. Adds a hard guard against silent vector-index corruption, fixes BM25 indexing for memories saved via `memory_save`, and lands four Hermes plugin fixes that make the memory provider actually usable end-to-end.
+Bug-fix patch focused on **search recall correctness** and **plugin compatibility**. Pins `iii-engine` to v0.11.2 because v0.11.6 introduces a new sandbox-everything-via-`iii worker add` model that agentmemory hasn't been refactored for yet — pin lifts once that refactor lands. Adds a hard guard against silent vector-index corruption, fixes BM25 indexing for memories saved via `memory_save`, and lands four Hermes plugin fixes that make the memory provider actually usable end-to-end.
 
 If you've been seeing `memory_smart_search` return empty results for memories you just saved, this release fixes that. If you've been hitting `hermes memory status` reporting "not available" against a healthy systemd-managed install, this release fixes that too.
 

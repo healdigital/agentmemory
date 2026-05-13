@@ -13,6 +13,8 @@
  * files at build time from a known working directory (where this script
  * actually runs), we avoid the runtime path-guessing entirely.
  */
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -553,6 +553,44 @@ npx -y @agentmemory/mcp
 
 ---
 
+<h2 id="deploy">Deploy</h2>
+
+One-click templates for managed hosts. Each one ships a self-contained
+Dockerfile that pulls `@agentmemory/agentmemory` from npm and copies
+the iii engine binary in from the official `iiidev/iii` Docker Hub
+image — no pre-built agentmemory image required. Persistent storage
+mounts at `/data`; the first-boot entrypoint overwrites the
+npm-bundled iii config (which binds `127.0.0.1`) with a deploy-tuned
+one that binds `0.0.0.0` and uses absolute `/data` paths, generates
+the HMAC secret, then drops privileges from `root` to `node` via
+`gosu` before exec'ing the agentmemory CLI.
+
+<p>
+  <a href="https://fly.io/launch?repo=https://github.com/rohitg00/agentmemory&path=deploy/fly"><img src="https://img.shields.io/badge/Deploy%20to-fly.io-8b5cf6?style=for-the-badge&logo=fly.io&logoColor=white" alt="Deploy to fly.io" /></a>
+  <a href="https://railway.com/new/template?template=https%3A%2F%2Fgithub.com%2Frohitg00%2Fagentmemory&rootDirectory=deploy%2Frailway"><img src="https://img.shields.io/badge/Deploy%20to-Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white" alt="Deploy to Railway" /></a>
+</p>
+
+Render's one-click deploy button requires `render.yaml` at the repository root, which we deliberately keep clean. Use the Render Blueprint flow documented in [`deploy/render/`](./deploy/render/README.md) to point at the in-repo blueprint manually.
+
+Full setup details (HMAC capture, viewer SSH tunnel, rotation, backup,
+cost floors) live in [`deploy/`](./deploy/README.md):
+
+- [`deploy/fly`](./deploy/fly/README.md) — single machine with
+  `auto_stop_machines = "stop"`; cheapest idle.
+- [`deploy/railway`](./deploy/railway/README.md) — Hobby plan flat fee,
+  volume in the dashboard.
+- [`deploy/render`](./deploy/render/README.md) — Blueprint flow,
+  automatic disk snapshots on paid plans.
+- [`deploy/coolify`](./deploy/coolify/README.md) — self-hosted on your
+  own VPS via [Coolify](https://coolify.io/self-hosted); same Docker
+  Compose stack, you own the host and the data.
+
+Only port `3111` is published. The viewer on `3113` stays bound to
+loopback inside the container — every template's README documents the
+SSH-tunnel pattern for reaching it.
+
+---
+
 <h2 id="why-agentmemory"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/tags/light/section-why.svg"><img src="assets/tags/section-why.svg" alt="Why agentmemory" height="32" /></picture></h2>
 
 Every coding agent forgets everything when the session ends. You waste the first 5 minutes of every session re-explaining your stack. agentmemory runs in the background and eliminates that entirely.

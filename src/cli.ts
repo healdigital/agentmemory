@@ -87,7 +87,10 @@ Commands:
   doctor             Run diagnostic checks (server, flags, graph, providers)
   demo               Seed sample sessions and show recall in action
   upgrade            Upgrade local deps + iii runtime (best effort)
-  stop               Stop the running iii-engine started by this CLI
+  stop [--force]     Stop the running iii-engine started by this CLI.
+                     --force bypasses the Docker-heuristic guard and signals
+                     whatever pidfile+lsof report on the REST port (use when
+                     the engine was started natively but state file is missing).
   mcp                Start standalone MCP server (no engine required)
   import-jsonl [p]   Import Claude Code JSONL transcripts (default: ~/.claude/projects)
                      --max-files <N> | --max-files=<N>: override scan cap (default 200, max 1000;
@@ -1480,6 +1483,7 @@ async function runStop(): Promise<void> {
   const port = getRestPort();
   const state = readEngineState();
   const running = await isEngineRunning();
+  const force = args.includes("--force");
 
   if (state?.kind === "docker") {
     if (!running) {
@@ -1517,10 +1521,16 @@ async function runStop(): Promise<void> {
   if (!state) {
     const compose = discoverComposeFile();
     if (compose && pidfilePid === null) {
-      p.log.error(
-        `Engine is running on :${port} but no pidfile or state file is present. It may have been started via Docker compose by a different shell. Refusing to signal host PIDs.\n\nStop it with:\n  docker compose -f ${compose} down\n\nOr re-run with AGENTMEMORY_USE_DOCKER=1 to record state next time.`,
-      );
-      process.exit(1);
+      if (force) {
+        p.log.warn(
+          `--force: bypassing Docker-heuristic guard. Falling back to native pidfile + lsof on :${port}.`,
+        );
+      } else {
+        p.log.error(
+          `Engine is running on :${port} but no pidfile or state file is present. It may have been started via Docker compose by a different shell. Refusing to signal host PIDs.\n\nStop it with:\n  docker compose -f ${compose} down\n\nOr re-run with --force to signal whatever lsof finds on :${port}, or AGENTMEMORY_USE_DOCKER=1 to record state next time.`,
+        );
+        process.exit(1);
+      }
     }
   }
 

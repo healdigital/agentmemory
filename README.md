@@ -53,6 +53,7 @@
 </p>
 
 <p align="center">
+  <a href="#install">Install</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#benchmarks">Benchmarks</a> &bull;
   <a href="#vs-competitors">vs Competitors</a> &bull;
@@ -65,6 +66,27 @@
   <a href="#configuration">Config</a> &bull;
   <a href="#api">API</a>
 </p>
+
+---
+
+## Install
+
+```bash
+npm install -g @agentmemory/agentmemory     # once — bare `agentmemory` on PATH
+agentmemory                                  # start the memory server on :3111
+agentmemory demo                             # seed sample sessions + prove recall
+agentmemory connect claude-code              # wire your agent (also: codex, cursor, gemini-cli, ...)
+```
+
+Or via `npx` (no install):
+
+```bash
+npx @agentmemory/agentmemory
+```
+
+Heads-up — npx caches per version. If a bare `npx @agentmemory/agentmemory` serves an older release, force the latest with `npx -y @agentmemory/agentmemory@latest`, or clear the cache once with `rm -rf ~/.npm/_npx` (macOS/Linux; on Windows delete `%LOCALAPPDATA%\npm-cache\_npx`). The first npx run from v0.9.16+ prompts to install globally inline so the bare `agentmemory` command works everywhere afterwards.
+
+Full options at [Quick Start](#quick-start) below. Agent-specific wiring at [Works with every agent](#works-with-every-agent).
 
 ---
 
@@ -320,6 +342,28 @@ npx @agentmemory/agentmemory demo
 `demo` seeds 3 realistic sessions (JWT auth, N+1 query fix, rate limiting) and runs semantic searches against them. You'll see it find "N+1 query fix" when you search "database performance optimization" — keyword matching can't do that.
 
 Open `http://localhost:3113` to watch the memory build live.
+
+### Recommended: install globally
+
+`npx` caches per-version. If you ran `npx @agentmemory/agentmemory@0.9.14` last week, a bare `npx @agentmemory/agentmemory` may serve the stale 0.9.14 from `~/.npm/_npx/`, not the latest release. Install once and the bare `agentmemory` command works everywhere:
+
+```bash
+npm install -g @agentmemory/agentmemory
+agentmemory                    # start the server (same as the npx form)
+agentmemory stop               # tear it down
+agentmemory remove             # uninstall everything we created
+agentmemory connect claude-code   # wire one agent
+agentmemory doctor             # interactive diagnostics + fix prompts
+```
+
+From v0.9.16 onward, the first npx run prompts you to install globally inline — answer `Y` once and you're set. If you skip, fall back to either of these for a fresh fetch:
+
+```bash
+npx -y @agentmemory/agentmemory@latest                 # forces latest from npm (cross-platform)
+rm -rf ~/.npm/_npx && npx @agentmemory/agentmemory     # macOS/Linux only (POSIX shell)
+```
+
+On Windows / PowerShell, the equivalent cache clear is `Remove-Item -Recurse -Force "$env:LOCALAPPDATA\npm-cache\_npx"` — the `npx -y ...@latest` form above is the cross-platform option.
 
 ### Session Replay
 

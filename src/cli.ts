@@ -83,6 +83,10 @@ Usage: agentmemory [command] [options]
 Commands:
   (default)          Start agentmemory worker
   init               Copy bundled .env.example to ~/.agentmemory/.env if absent
+  connect [agent]    Wire agentmemory into an installed agent (claude-code, codex,
+                     cursor, gemini-cli, openclaw, hermes, pi, openhuman).
+                     No arg = interactive picker. --all wires every detected agent.
+                     --dry-run shows what would change. --force re-installs.
   status             Show connection status, memory count, flags, and health
   doctor             Run diagnostic checks (server, flags, graph, providers)
   demo               Seed sample sessions and show recall in action
@@ -1625,6 +1629,11 @@ async function runMcp(): Promise<void> {
   await import("./mcp/standalone.js");
 }
 
+async function runConnectCmd(): Promise<void> {
+  const { runConnect } = await import("./cli/connect/index.js");
+  await runConnect(args.slice(1));
+}
+
 async function runImportJsonl(): Promise<void> {
   // Long-form flags that take a value. Their value tokens must be
   // consumed alongside the flag so they don't leak into positional
@@ -1803,6 +1812,7 @@ async function runImportJsonl(): Promise<void> {
 
 const commands: Record<string, () => Promise<void>> = {
   init: runInit,
+  connect: runConnectCmd,
   status: runStatus,
   doctor: runDoctor,
   demo: runDemo,

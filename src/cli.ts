@@ -266,7 +266,7 @@ function engineStatePath(): string {
 }
 
 type EngineState =
-  | { kind: "native"; configPath: string }
+  | { kind: "native"; configPath: string; attached?: boolean }
   | { kind: "docker"; composeFile: string };
 
 function writeEnginePidfile(pid: number): void {
@@ -331,6 +331,32 @@ function discoverComposeFile(): string | null {
     join(process.cwd(), "docker-compose.yml"),
   ];
   return candidates.find((c) => existsSync(c)) ?? null;
+}
+
+function adoptRunningEngine(): void {
+  try {
+    const existingState = readEngineState();
+    const existingPid = readEnginePidfile();
+    if (existingState && existingPid) return;
+
+    const pids = findEnginePidsByPort(getRestPort());
+    const enginePid = pids[0];
+    if (enginePid && !existingPid) {
+      writeEnginePidfile(enginePid);
+    }
+    if (!existingState) {
+      writeEngineState({
+        kind: "native",
+        configPath: findIiiConfig() || "",
+        attached: true,
+      });
+    }
+    if (enginePid && !existingPid) {
+      p.log.info(`Attached to existing iii-engine (pid ${enginePid})`);
+    }
+  } catch (err) {
+    vlog(`adoptRunningEngine: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function runIiiInstaller(): Promise<{ ok: boolean; binPath: string | null }> {
@@ -644,6 +670,7 @@ async function main() {
     const attachedBin =
       whichBinary("iii") ?? fallbackIiiPaths().find((p) => existsSync(p)) ?? null;
     warnIfEngineVersionMismatch(attachedBin);
+    adoptRunningEngine();
     await import("./index.js");
     return;
   }

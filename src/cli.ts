@@ -87,7 +87,10 @@ Commands:
   doctor             Run diagnostic checks (server, flags, graph, providers)
   demo               Seed sample sessions and show recall in action
   upgrade            Upgrade local deps + iii runtime (best effort)
-  stop               Stop the running iii-engine started by this CLI
+  stop [--force]     Stop the running iii-engine started by this CLI.
+                     --force bypasses the Docker-heuristic guard and signals
+                     whatever pidfile+lsof report on the REST port (use when
+                     the engine was started natively but state file is missing).
   mcp                Start standalone MCP server (no engine required)
   import-jsonl [p]   Import Claude Code JSONL transcripts (default: ~/.claude/projects)
                      --max-files <N> | --max-files=<N>: override scan cap (default 200, max 1000;
@@ -239,6 +242,21 @@ function iiiBinVersion(binPath: string): string | null {
   }
 }
 
+let warnedVersionMismatch = false;
+function warnIfEngineVersionMismatch(iiiBinPath: string | null | undefined): void {
+  if (!iiiBinPath || warnedVersionMismatch) return;
+  const detected = iiiBinVersion(iiiBinPath);
+  if (!detected || detected === IIPINNED_VERSION) return;
+  warnedVersionMismatch = true;
+  const asset = iiiReleaseAsset();
+  const downloadHint = asset
+    ? `curl -fsSL https://github.com/iii-hq/iii/releases/download/iii/v${IIPINNED_VERSION}/${asset} | tar -xz -C ~/.local/bin`
+    : `download v${IIPINNED_VERSION} from https://github.com/iii-hq/iii/releases/tag/iii%2Fv${IIPINNED_VERSION}`;
+  p.log.warn(
+    `iii-engine on PATH is v${detected} but agentmemory v0.9.14+ pins v${IIPINNED_VERSION}. Set AGENTMEMORY_III_VERSION=${detected} to silence, or downgrade with: \`${downloadHint}\``,
+  );
+}
+
 function enginePidfilePath(): string {
   return join(homedir(), ".agentmemory", "iii.pid");
 }
@@ -248,7 +266,7 @@ function engineStatePath(): string {
 }
 
 type EngineState =
-  | { kind: "native"; configPath: string }
+  | { kind: "native"; configPath: string; attached?: boolean }
   | { kind: "docker"; composeFile: string };
 
 function writeEnginePidfile(pid: number): void {
@@ -313,6 +331,61 @@ function discoverComposeFile(): string | null {
     join(process.cwd(), "docker-compose.yml"),
   ];
   return candidates.find((c) => existsSync(c)) ?? null;
+}
+
+function isInvokedViaNpx(): boolean {
+  if (process.env["npm_lifecycle_event"] === "npx") return true;
+  const argv1 = process.argv[1] ?? "";
+  if (argv1.includes("_npx")) return true;
+  const ua = process.env["npm_config_user_agent"] ?? "";
+  if (ua.startsWith("npm/") || ua.includes(" npm/")) return true;
+  return false;
+}
+
+function shouldSkipNpxHint(): boolean {
+  try {
+    const prefsPath = join(homedir(), ".agentmemory", "preferences.json");
+    if (!existsSync(prefsPath)) return false;
+    const raw = readFileSync(prefsPath, "utf-8");
+    const prefs = JSON.parse(raw) as { skipNpxHint?: boolean };
+    return prefs?.skipNpxHint === true;
+  } catch {
+    return false;
+  }
+}
+
+function maybeEmitNpxHint(): void {
+  if (!isInvokedViaNpx()) return;
+  if (shouldSkipNpxHint()) return;
+  p.log.info(
+    "Tip: install globally for the bare `agentmemory` command:\n  npm install -g @agentmemory/agentmemory",
+  );
+}
+
+function adoptRunningEngine(): void {
+  try {
+    const existingState = readEngineState();
+    const existingPid = readEnginePidfile();
+    if (existingState && existingPid) return;
+
+    const pids = findEnginePidsByPort(getRestPort());
+    const enginePid = pids[0];
+    if (enginePid && !existingPid) {
+      writeEnginePidfile(enginePid);
+    }
+    if (!existingState) {
+      writeEngineState({
+        kind: "native",
+        configPath: findIiiConfig() || "",
+        attached: true,
+      });
+    }
+    if (enginePid && !existingPid) {
+      p.log.info(`Attached to existing iii-engine (pid ${enginePid})`);
+    }
+  } catch (err) {
+    vlog(`adoptRunningEngine: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function runIiiInstaller(): Promise<{ ok: boolean; binPath: string | null }> {
@@ -427,6 +500,7 @@ function spawnEngineBackground(
 }
 
 function startIiiBin(iiiBin: string, configPath: string): boolean {
+  warnIfEngineVersionMismatch(iiiBin);
   const s = p.spinner();
   s.start(`Starting iii-engine: ${iiiBin}`);
   writeEngineState({ kind: "native", configPath });
@@ -622,6 +696,11 @@ async function main() {
 
   if (await isEngineRunning()) {
     p.log.success("iii-engine is running");
+    const attachedBin =
+      whichBinary("iii") ?? fallbackIiiPaths().find((p) => existsSync(p)) ?? null;
+    warnIfEngineVersionMismatch(attachedBin);
+    adoptRunningEngine();
+    maybeEmitNpxHint();
     await import("./index.js");
     return;
   }
@@ -690,6 +769,7 @@ async function main() {
   }
 
   s.stop("iii-engine is ready");
+  maybeEmitNpxHint();
   await import("./index.js");
 }
 
@@ -1461,6 +1541,7 @@ async function runStop(): Promise<void> {
   const port = getRestPort();
   const state = readEngineState();
   const running = await isEngineRunning();
+  const force = args.includes("--force");
 
   if (state?.kind === "docker") {
     if (!running) {
@@ -1498,10 +1579,16 @@ async function runStop(): Promise<void> {
   if (!state) {
     const compose = discoverComposeFile();
     if (compose && pidfilePid === null) {
-      p.log.error(
-        `Engine is running on :${port} but no pidfile or state file is present. It may have been started via Docker compose by a different shell. Refusing to signal host PIDs.\n\nStop it with:\n  docker compose -f ${compose} down\n\nOr re-run with AGENTMEMORY_USE_DOCKER=1 to record state next time.`,
-      );
-      process.exit(1);
+      if (force) {
+        p.log.warn(
+          `--force: bypassing Docker-heuristic guard. Falling back to native pidfile + lsof on :${port}.`,
+        );
+      } else {
+        p.log.error(
+          `Engine is running on :${port} but no pidfile or state file is present. It may have been started via Docker compose by a different shell. Refusing to signal host PIDs.\n\nStop it with:\n  docker compose -f ${compose} down\n\nOr re-run with --force to signal whatever lsof finds on :${port}, or AGENTMEMORY_USE_DOCKER=1 to record state next time.`,
+        );
+        process.exit(1);
+      }
     }
   }
 

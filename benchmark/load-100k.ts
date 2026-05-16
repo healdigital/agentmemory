@@ -23,6 +23,8 @@
  * back to a timestamp when run outside a checkout.
  */
 
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
 import { spawn, type ChildProcess } from "node:child_process";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync, existsSync } from "node:fs";
